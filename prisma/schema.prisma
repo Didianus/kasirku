@@ -1,0 +1,154 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String        @id @default(uuid())
+  name         String
+  email        String        @unique
+  password     String
+  role         String        @default("kasir")
+  active       Boolean       @default(true)
+
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  stockLogs    StockLog[]
+  transactions Transaction[]
+}
+
+model Category {
+  id        String    @id @default(uuid())
+  name      String    @unique
+  icon      String?
+  color     String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  products  Product[]
+}
+
+model Product {
+  id              String             @id @default(uuid())
+
+  barcode         String?            @unique
+  name            String
+  description     String?
+
+  price           Int
+  costPrice       Int                @default(0)
+
+  stock           Int                @default(0)
+  minStock        Int                @default(5)
+
+  unit            String             @default("pcs")
+
+  image           String?
+  active          Boolean            @default(true)
+
+  categoryId      String
+
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  category         Category           @relation(fields: [categoryId], references: [id])
+  stockLogs        StockLog[]
+  transactionItems TransactionItem[]
+
+  @@index([categoryId])
+}
+
+model StockLog {
+  id          String   @id @default(uuid())
+
+  productId   String
+  userId      String
+
+  type        String
+  quantity    Int
+  note        String?
+
+  createdAt   DateTime @default(now())
+
+  product     Product @relation(fields: [productId], references: [id])
+  user        User    @relation(fields: [userId], references: [id])
+
+  @@index([productId])
+  @@index([userId])
+}
+
+model StoreConfig {
+  id              String   @id @default(uuid())
+
+  storeName       String   @default("KasirKu POS")
+  logo            String?
+  address         String?
+  phone           String?
+
+  taxRate         Float    @default(0)
+
+  receiptFooter   String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Transaction {
+  id               String            @id @default(uuid())
+
+  invoiceNumber    String            @unique
+
+  userId           String
+
+  customerName     String?
+
+  subtotal         Int               @default(0)
+  discount         Int               @default(0)
+  discountType     String            @default("nominal")
+  tax              Int               @default(0)
+
+  total            Int               @default(0)
+
+  paid             Int               @default(0)
+  change           Int               @default(0)
+
+  paymentMethod    String            @default("cash")
+  status           String            @default("completed")
+
+  notes            String?
+
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  user             User              @relation(fields: [userId], references: [id])
+  items            TransactionItem[]
+
+  @@index([userId])
+}
+
+model TransactionItem {
+  id              String        @id @default(uuid())
+
+  transactionId   String
+  productId       String
+
+  productName     String
+
+  price           Int
+  quantity        Int
+  subtotal        Int
+
+  createdAt       DateTime @default(now())
+
+  product         Product      @relation(fields: [productId], references: [id])
+  transaction     Transaction  @relation(fields: [transactionId], references: [id])
+
+  @@index([transactionId])
+  @@index([productId])
+}

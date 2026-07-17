@@ -1,0 +1,1078 @@
+     1→'use client'
+     2→
+     3→import React, { useState, useEffect, useCallback, useMemo } from 'react'
+     4→import {
+     5→  Search,
+     6→  ShoppingCart,
+     7→  Plus,
+     8→  Minus,
+     9→  X,
+    10→  Trash2,
+    11→  Banknote,
+    12→  CreditCard,
+    13→  QrCode,
+    14→  ArrowRightLeft,
+    15→  ShoppingBag,
+    16→  CheckCircle2,
+    17→  Receipt,
+    18→  RefreshCw,
+    19→  Tag,
+    20→  Percent,
+    21→  ChevronDown,
+    22→  Package,
+    23→} from 'lucide-react'
+    24→import { Button } from '@/components/ui/button'
+    25→import { Input } from '@/components/ui/input'
+    26→import { Card, CardContent } from '@/components/ui/card'
+    27→import { Badge } from '@/components/ui/badge'
+    28→import { Separator } from '@/components/ui/separator'
+    29→import { Label } from '@/components/ui/label'
+    30→import { Switch } from '@/components/ui/switch'
+    31→import { Skeleton } from '@/components/ui/skeleton'
+    32→import { ScrollArea } from '@/components/ui/scroll-area'
+    33→import {
+    34→  Dialog,
+    35→  DialogContent,
+    36→  DialogHeader,
+    37→  DialogTitle,
+    38→  DialogDescription,
+    39→  DialogFooter,
+    40→} from '@/components/ui/dialog'
+    41→import {
+    42→  Sheet,
+    43→  SheetContent,
+    44→  SheetHeader,
+    45→  SheetTitle,
+    46→  SheetDescription,
+    47→  SheetFooter,
+    48→} from '@/components/ui/sheet'
+    49→import {
+    50→  Select,
+    51→  SelectContent,
+    52→  SelectItem,
+    53→  SelectTrigger,
+    54→  SelectValue,
+    55→} from '@/components/ui/select'
+    56→import { useToast } from '@/hooks/use-toast'
+    57→import { useIsMobile } from '@/hooks/use-mobile'
+    58→import { cn } from '@/lib/utils'
+    59→
+    60→// ─── Types ───────────────────────────────────────────────────────────────────
+    61→
+    62→interface PosKasirProps {
+    63→  user: {
+    64→    id: string
+    65→    name: string
+    66→    email: string
+    67→    role: string
+    68→  }
+    69→}
+    70→
+    71→type CartItem = {
+    72→  productId: string
+    73→  productName: string
+    74→  price: number
+    75→  quantity: number
+    76→  stock: number
+    77→}
+    78→
+    79→type Product = {
+    80→  id: string
+    81→  name: string
+    82→  barcode: string | null
+    83→  description: string | null
+    84→  price: number
+    85→  stock: number
+    86→  minStock: number
+    87→  unit: string
+    88→  categoryId: string
+    89→  image: string | null
+    90→  active: boolean
+    91→  category: {
+    92→    id: string
+    93→    name: string
+    94→    icon: string | null
+    95→    color: string | null
+    96→  }
+    97→}
+    98→
+    99→type Category = {
+   100→  id: string
+   101→  name: string
+   102→  icon: string | null
+   103→  color: string | null
+   104→  productCount: number
+   105→}
+   106→
+   107→type StoreConfig = {
+   108→  id: string
+   109→  storeName: string
+   110→  taxRate: number
+   111→  address: string | null
+   112→  phone: string | null
+   113→  receiptFooter: string | null
+   114→}
+   115→
+   116→type PaymentMethod = 'cash' | 'card' | 'qris' | 'transfer'
+   117→type DiscountType = 'nominal' | 'percent'
+   118→
+   119→// ─── Helper ──────────────────────────────────────────────────────────────────
+   120→
+   121→function formatRupiah(amount: number): string {
+   122→  return new Intl.NumberFormat('id-ID', {
+   123→    style: 'currency',
+   124→    currency: 'IDR',
+   125→    minimumFractionDigits: 0,
+   126→  }).format(amount)
+   127→}
+   128→
+   129→// ─── Component ───────────────────────────────────────────────────────────────
+   130→
+   131→export function PosKasir({ user }: PosKasirProps) {
+   132→  const { toast } = useToast()
+   133→  const isMobile = useIsMobile()
+   134→
+   135→  // ── State ────────────────────────────────────────────────────────────────
+   136→  const [products, setProducts] = useState<Product[]>([])
+   137→  const [categories, setCategories] = useState<Category[]>([])
+   138→  const [storeConfig, setStoreConfig] = useState<StoreConfig | null>(null)
+   139→  const [loading, setLoading] = useState(true)
+   140→
+   141→  const [searchQuery, setSearchQuery] = useState('')
+   142→  const [selectedCategory, setSelectedCategory] = useState<string>('all')
+   143→
+   144→  const [cart, setCart] = useState<CartItem[]>([])
+   145→  const [cartOpen, setCartOpen] = useState(false) // mobile sheet
+   146→
+   147→  const [discountEnabled, setDiscountEnabled] = useState(false)
+   148→  const [discountType, setDiscountType] = useState<DiscountType>('nominal')
+   149→  const [discountValue, setDiscountValue] = useState<string>('0')
+   150→
+   151→  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash')
+   152→  const [paidAmount, setPaidAmount] = useState<string>('')
+   153→
+   154→  const [processing, setProcessing] = useState(false)
+   155→  const [successDialog, setSuccessDialog] = useState(false)
+   156→  const [lastTransaction, setLastTransaction] = useState<{
+   157→    invoiceNumber: string
+   158→    total: number
+   159→    paymentMethod: string
+   160→    change: number
+   161→  } | null>(null)
+   162→
+   163→  // ── Fetch Data ───────────────────────────────────────────────────────────
+   164→  const fetchProducts = useCallback(async () => {
+   165→    try {
+   166→      const res = await fetch('/api/products?active=true&limit=100')
+   167→      if (!res.ok) throw new Error('Gagal memuat produk')
+   168→      const data = await res.json()
+   169→      setProducts(data.products || [])
+   170→    } catch {
+   171→      toast({
+   172→        title: 'Error',
+   173→        description: 'Gagal memuat data produk',
+   174→        variant: 'destructive',
+   175→      })
+   176→    }
+   177→  }, [toast])
+   178→
+   179→  const fetchCategories = useCallback(async () => {
+   180→    try {
+   181→      const res = await fetch('/api/categories')
+   182→      if (!res.ok) throw new Error('Gagal memuat kategori')
+   183→      const data = await res.json()
+   184→      setCategories(data.categories || [])
+   185→    } catch {
+   186→      toast({
+   187→        title: 'Error',
+   188→        description: 'Gagal memuat data kategori',
+   189→        variant: 'destructive',
+   190→      })
+   191→    }
+   192→  }, [toast])
+   193→
+   194→  const fetchStoreConfig = useCallback(async () => {
+   195→    try {
+   196→      const res = await fetch('/api/store-config')
+   197→      if (!res.ok) throw new Error('Gagal memuat konfigurasi toko')
+   198→      const data = await res.json()
+   199→      setStoreConfig(data.config)
+   200→    } catch {
+   201→      // Default tax rate if fetch fails
+   202→      setStoreConfig({ id: '', storeName: 'KasirKu POS', taxRate: 0, address: null, phone: null, receiptFooter: null })
+   203→    }
+   204→  }, [])
+   205→
+   206→  useEffect(() => {
+   207→    const loadData = async () => {
+   208→      setLoading(true)
+   209→      await Promise.all([fetchProducts(), fetchCategories(), fetchStoreConfig()])
+   210→      setLoading(false)
+   211→    }
+   212→    loadData()
+   213→  }, [fetchProducts, fetchCategories, fetchStoreConfig])
+   214→
+   215→  // ── Computed Values ──────────────────────────────────────────────────────
+   216→  const filteredProducts = useMemo(() => {
+   217→    let filtered = products
+   218→
+   219→    if (selectedCategory !== 'all') {
+   220→      filtered = filtered.filter((p) => p.categoryId === selectedCategory)
+   221→    }
+   222→
+   223→    if (searchQuery.trim()) {
+   224→      const q = searchQuery.toLowerCase().trim()
+   225→      filtered = filtered.filter(
+   226→        (p) =>
+   227→          p.name.toLowerCase().includes(q) ||
+   228→          (p.barcode && p.barcode.toLowerCase().includes(q))
+   229→      )
+   230→    }
+   231→
+   232→    return filtered
+   233→  }, [products, selectedCategory, searchQuery])
+   234→
+   235→  const subtotal = useMemo(
+   236→    () => cart.reduce((sum, item) => sum + item.price * item.quantity, 0),
+   237→    [cart]
+   238→  )
+   239→
+   240→  const discountAmount = useMemo(() => {
+   241→    if (!discountEnabled) return 0
+   242→    const val = parseFloat(discountValue) || 0
+   243→    if (val <= 0) return 0
+   244→    if (discountType === 'percent') {
+   245→      return Math.round(subtotal * (val / 100))
+   246→    }
+   247→    return Math.min(val, subtotal) // cap at subtotal
+   248→  }, [discountEnabled, discountType, discountValue, subtotal])
+   249→
+   250→  const afterDiscount = subtotal - discountAmount
+   251→
+   252→  const taxRate = storeConfig?.taxRate || 0
+   253→  const taxAmount = useMemo(
+   254→    () => Math.round(afterDiscount * (taxRate / 100)),
+   255→    [afterDiscount, taxRate]
+   256→  )
+   257→
+   258→  const total = afterDiscount + taxAmount
+   259→
+   260→  const paid = parseFloat(paidAmount) || 0
+   261→  const change = paymentMethod === 'cash' ? paid - total : 0
+   262→
+   263→  const cartItemCount = cart.reduce((sum, item) => sum + item.quantity, 0)
+   264→
+   265→  const paymentMethodLabel: Record<PaymentMethod, string> = {
+   266→    cash: 'Tunai',
+   267→    card: 'Kartu',
+   268→    qris: 'QRIS',
+   269→    transfer: 'Transfer',
+   270→  }
+   271→
+   272→  // ── Cart Actions ─────────────────────────────────────────────────────────
+   273→  const addToCart = useCallback(
+   274→    (product: Product) => {
+   275→      if (product.stock <= 0) return
+   276→
+   277→      setCart((prev) => {
+   278→        const existing = prev.find((item) => item.productId === product.id)
+   279→        if (existing) {
+   280→          if (existing.quantity >= product.stock) {
+   281→            toast({
+   282→              title: 'Stok Tidak Cukup',
+   283→              description: `Stok ${product.name} hanya tersisa ${product.stock}`,
+   284→              variant: 'destructive',
+   285→            })
+   286→            return prev
+   287→          }
+   288→          return prev.map((item) =>
+   289→            item.productId === product.id
+   290→              ? { ...item, quantity: item.quantity + 1 }
+   291→              : item
+   292→          )
+   293→        }
+   294→        return [
+   295→          ...prev,
+   296→          {
+   297→            productId: product.id,
+   298→            productName: product.name,
+   299→            price: product.price,
+   300→            quantity: 1,
+   301→            stock: product.stock,
+   302→          },
+   303→        ]
+   304→      })
+   305→    },
+   306→    [toast]
+   307→  )
+   308→
+   309→  const updateQuantity = useCallback(
+   310→    (productId: string, delta: number) => {
+   311→      setCart((prev) =>
+   312→        prev
+   313→          .map((item) => {
+   314→            if (item.productId !== productId) return item
+   315→            const newQty = item.quantity + delta
+   316→            if (newQty <= 0) return item // don't go below 1, use remove instead
+   317→            if (newQty > item.stock) {
+   318→              toast({
+   319→                title: 'Stok Tidak Cukup',
+   320→                description: `Stok ${item.productName} hanya tersisa ${item.stock}`,
+   321→                variant: 'destructive',
+   322→              })
+   323→              return item
+   324→            }
+   325→            return { ...item, quantity: newQty }
+   326→          })
+   327→          .filter((item) => item.quantity > 0)
+   328→      )
+   329→    },
+   330→    [toast]
+   331→  )
+   332→
+   333→  const removeFromCart = useCallback((productId: string) => {
+   334→    setCart((prev) => prev.filter((item) => item.productId !== productId))
+   335→  }, [])
+   336→
+   337→  const clearCart = useCallback(() => {
+   338→    setCart([])
+   339→    setDiscountEnabled(false)
+   340→    setDiscountValue('0')
+   341→    setPaidAmount('')
+   342→    setPaymentMethod('cash')
+   343→  }, [])
+   344→
+   345→  const getCartQuantity = useCallback(
+   346→    (productId: string) => {
+   347→      const item = cart.find((i) => i.productId === productId)
+   348→      return item?.quantity || 0
+   349→    },
+   350→    [cart]
+   351→  )
+   352→
+   353→  // ── Payment ──────────────────────────────────────────────────────────────
+   354→  const isPaymentValid = useMemo(() => {
+   355→    if (cart.length === 0) return false
+   356→    if (paymentMethod === 'cash' && paid < total) return false
+   357→    return true
+   358→  }, [cart, paymentMethod, paid, total])
+   359→
+   360→  const handlePayment = async () => {
+   361→    if (!isPaymentValid || processing) return
+   362→    setProcessing(true)
+   363→
+   364→    try {
+   365→      const payload = {
+   366→        userId: user.id,
+   367→        customerName: null,
+   368→        items: cart.map((item) => ({
+   369→          productId: item.productId,
+   370→          productName: item.productName,
+   371→          price: item.price,
+   372→          quantity: item.quantity,
+   373→          subtotal: item.price * item.quantity,
+   374→        })),
+   375→        discount: discountAmount,
+   376→        discountType,
+   377→        discountValue: parseFloat(discountValue) || 0,
+   378→        paymentMethod,
+   379→        paid: paymentMethod === 'cash' ? paid : total,
+   380→      }
+   381→
+   382→      const res = await fetch('/api/transactions', {
+   383→        method: 'POST',
+   384→        headers: { 'Content-Type': 'application/json' },
+   385→        body: JSON.stringify(payload),
+   386→      })
+   387→
+   388→      if (!res.ok) {
+   389→        const data = await res.json()
+   390→        throw new Error(data.error || 'Gagal memproses transaksi')
+   391→      }
+   392→
+   393→      const data = await res.json()
+   394→      const txn = data.transaction
+   395→
+   396→      setLastTransaction({
+   397→        invoiceNumber: txn.invoiceNumber,
+   398→        total: txn.total,
+   399→        paymentMethod: txn.paymentMethod,
+   400→        change: txn.change,
+   401→      })
+   402→
+   403→      // Show success dialog
+   404→      setSuccessDialog(true)
+   405→
+   406→      // Clear cart
+   407→      clearCart()
+   408→
+   409→      // Re-fetch products (stock changed)
+   410→      fetchProducts()
+   411→    } catch (err) {
+   412→      toast({
+   413→        title: 'Transaksi Gagal',
+   414→        description: err instanceof Error ? err.message : 'Terjadi kesalahan',
+   415→        variant: 'destructive',
+   416→      })
+   417→    } finally {
+   418→      setProcessing(false)
+   419→    }
+   420→  }
+   421→
+   422→  const handleNewTransaction = () => {
+   423→    setSuccessDialog(false)
+   424→    setLastTransaction(null)
+   425→  }
+   426→
+   427→  const handlePrintReceipt = () => {
+   428→    console.log('Cetak Struk:', lastTransaction?.invoiceNumber)
+   429→    toast({ title: 'Struk', description: 'Fitur cetak struk akan segera tersedia' })
+   430→  }
+   431→
+   432→  // ── Stock Color Indicator ────────────────────────────────────────────────
+   433→  const getStockColor = (stock: number, minStock: number) => {
+   434→    if (stock <= 0) return 'text-red-500'
+   435→    if (stock <= minStock) return 'text-red-500'
+   436→    if (stock <= minStock * 2) return 'text-amber-500'
+   437→    return 'text-emerald-600'
+   438→  }
+   439→
+   440→  const getStockBgColor = (stock: number, minStock: number) => {
+   441→    if (stock <= 0) return 'bg-red-50 dark:bg-red-950/30'
+   442→    if (stock <= minStock) return 'bg-red-50 dark:bg-red-950/30'
+   443→    if (stock <= minStock * 2) return 'bg-amber-50 dark:bg-amber-950/30'
+   444→    return 'bg-emerald-50 dark:bg-emerald-950/30'
+   445→  }
+   446→
+   447→  // ─── Cart Content (shared between desktop & mobile) ──────────────────────
+   448→  const cartContent = (
+   449→    <div className="flex flex-col h-full">
+   450→      {/* Cart Header */}
+   451→      <div className="flex items-center justify-between px-4 py-3 border-b">
+   452→        <div className="flex items-center gap-2">
+   453→          <ShoppingCart className="h-5 w-5 text-emerald-600" />
+   454→          <h2 className="font-semibold text-lg">Keranjang Belanja</h2>
+   455→          {cartItemCount > 0 && (
+   456→            <Badge className="bg-emerald-600 text-white hover:bg-emerald-700 ml-1">
+   457→              {cartItemCount}
+   458→            </Badge>
+   459→          )}
+   460→        </div>
+   461→        {cart.length > 0 && (
+   462→          <Button
+   463→            variant="ghost"
+   464→            size="sm"
+   465→            onClick={clearCart}
+   466→            className="text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30"
+   467→          >
+   468→            <Trash2 className="h-4 w-4 mr-1" />
+   469→            Hapus
+   470→          </Button>
+   471→        )}
+   472→      </div>
+   473→
+   474→      {/* Cart Items */}
+   475→      <div className="flex-1 overflow-hidden">
+   476→        {cart.length === 0 ? (
+   477→          <div className="flex flex-col items-center justify-center h-full py-12 text-muted-foreground">
+   478→            <ShoppingBag className="h-16 w-16 mb-3 opacity-30" />
+   479→            <p className="text-sm font-medium">Keranjang kosong</p>
+   480→            <p className="text-xs mt-1">Klik produk untuk menambahkan</p>
+   481→          </div>
+   482→        ) : (
+   483→          <ScrollArea className="h-full">
+   484→            <div className="p-4 space-y-3">
+   485→              {cart.map((item) => (
+   486→                <div
+   487→                  key={item.productId}
+   488→                  className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-sm rounded-xl p-3 border border-slate-200/50 dark:border-slate-700/50 shadow-sm"
+   489→                >
+   490→                  <div className="flex items-start justify-between gap-2">
+   491→                    <div className="flex-1 min-w-0">
+   492→                      <p className="font-medium text-sm truncate">{item.productName}</p>
+   493→                      <p className="text-xs text-muted-foreground mt-0.5">
+   494→                        {formatRupiah(item.price)} / item
+   495→                      </p>
+   496→                    </div>
+   497→                    <Button
+   498→                      variant="ghost"
+   499→                      size="icon"
+   500→                      className="h-6 w-6 text-muted-foreground hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 shrink-0"
+   501→                      onClick={() => removeFromCart(item.productId)}
+   502→                    >
+   503→                      <X className="h-3.5 w-3.5" />
+   504→                    </Button>
+   505→                  </div>
+   506→                  <div className="flex items-center justify-between mt-2">
+   507→                    <div className="flex items-center gap-1">
+   508→                      <Button
+   509→                        variant="outline"
+   510→                        size="icon"
+   511→                        className="h-7 w-7 rounded-lg"
+   512→                        onClick={() => updateQuantity(item.productId, -1)}
+   513→                        disabled={item.quantity <= 1}
+   514→                      >
+   515→                        <Minus className="h-3.5 w-3.5" />
+   516→                      </Button>
+   517→                      <span className="w-8 text-center text-sm font-semibold">
+   518→                        {item.quantity}
+   519→                      </span>
+   520→                      <Button
+   521→                        variant="outline"
+   522→                        size="icon"
+   523→                        className="h-7 w-7 rounded-lg"
+   524→                        onClick={() => updateQuantity(item.productId, 1)}
+   525→                        disabled={item.quantity >= item.stock}
+   526→                      >
+   527→                        <Plus className="h-3.5 w-3.5" />
+   528→                      </Button>
+   529→                    </div>
+   530→                    <p className="font-semibold text-sm text-emerald-700 dark:text-emerald-400">
+   531→                      {formatRupiah(item.price * item.quantity)}
+   532→                    </p>
+   533→                  </div>
+   534→                </div>
+   535→              ))}
+   536→            </div>
+   537→          </ScrollArea>
+   538→        )}
+   539→      </div>
+   540→
+   541→      {/* Cart Summary & Payment */}
+   542→      <div className="border-t bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm">
+   543→        <div className="p-4 space-y-3">
+   544→          {/* Summary */}
+   545→          <div className="space-y-2">
+   546→            <div className="flex justify-between text-sm">
+   547→              <span className="text-muted-foreground">Subtotal</span>
+   548→              <span className="font-medium">{formatRupiah(subtotal)}</span>
+   549→            </div>
+   550→
+   551→            {/* Discount Section */}
+   552→            <div className="space-y-2">
+   553→              <div className="flex items-center justify-between">
+   554→                <div className="flex items-center gap-2">
+   555→                  <Switch
+   556→                    checked={discountEnabled}
+   557→                    onCheckedChange={setDiscountEnabled}
+   558→                    className="data-[state=checked]:bg-emerald-600"
+   559→                  />
+   560→                  <Label className="text-sm text-muted-foreground">Diskon</Label>
+   561→                </div>
+   562→              </div>
+   563→              {discountEnabled && (
+   564→                <div className="flex items-center gap-2 ml-7">
+   565→                  <Select
+   566→                    value={discountType}
+   567→                    onValueChange={(v) => {
+   568→                      setDiscountType(v as DiscountType)
+   569→                      setDiscountValue('0')
+   570→                    }}
+   571→                  >
+   572→                    <SelectTrigger className="w-28 h-8 text-xs">
+   573→                      <SelectValue />
+   574→                    </SelectTrigger>
+   575→                    <SelectContent>
+   576→                      <SelectItem value="nominal">
+   577→                        <div className="flex items-center gap-1">
+   578→                          <Tag className="h-3 w-3" />
+   579→                          Nominal
+   580→                        </div>
+   581→                      </SelectItem>
+   582→                      <SelectItem value="percent">
+   583→                        <div className="flex items-center gap-1">
+   584→                          <Percent className="h-3 w-3" />
+   585→                          Persen
+   586→                        </div>
+   587→                      </SelectItem>
+   588→                    </SelectContent>
+   589→                  </Select>
+   590→                  <Input
+   591→                    type="number"
+   592→                    min="0"
+   593→                    value={discountValue}
+   594→                    onChange={(e) => setDiscountValue(e.target.value)}
+   595→                    placeholder="0"
+   596→                    className="h-8 text-xs w-24"
+   597→                  />
+   598→                  {discountAmount > 0 && (
+   599→                    <span className="text-xs text-red-500 font-medium whitespace-nowrap">
+   600→                      -{formatRupiah(discountAmount)}
+   601→                    </span>
+   602→                  )}
+   603→                </div>
+   604→              )}
+   605→            </div>
+   606→
+   607→            {/* Tax */}
+   608→            {taxRate > 0 && (
+   609→              <div className="flex justify-between text-sm">
+   610→                <span className="text-muted-foreground">
+   611→                  Pajak ({taxRate}%)
+   612→                </span>
+   613→                <span className="font-medium">{formatRupiah(taxAmount)}</span>
+   614→              </div>
+   615→            )}
+   616→
+   617→            <Separator />
+   618→
+   619→            {/* Total */}
+   620→            <div className="flex justify-between items-center">
+   621→              <span className="font-semibold text-base">Total</span>
+   622→              <span className="font-bold text-xl text-emerald-700 dark:text-emerald-400">
+   623→                {formatRupiah(total)}
+   624→              </span>
+   625→            </div>
+   626→          </div>
+   627→
+   628→          <Separator />
+   629→
+   630→          {/* Payment Method */}
+   631→          <div className="space-y-2">
+   632→            <Label className="text-sm font-medium">Metode Pembayaran</Label>
+   633→            <div className="grid grid-cols-4 gap-2">
+   634→              <Button
+   635→                variant={paymentMethod === 'cash' ? 'default' : 'outline'}
+   636→                size="sm"
+   637→                className={cn(
+   638→                  'flex flex-col items-center gap-1 h-auto py-2 rounded-xl',
+   639→                  paymentMethod === 'cash'
+   640→                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+   641→                    : 'hover:bg-emerald-50 dark:hover:bg-emerald-950/30'
+   642→                )}
+   643→                onClick={() => setPaymentMethod('cash')}
+   644→              >
+   645→                <Banknote className="h-4 w-4" />
+   646→                <span className="text-[10px]">Tunai</span>
+   647→              </Button>
+   648→              <Button
+   649→                variant={paymentMethod === 'card' ? 'default' : 'outline'}
+   650→                size="sm"
+   651→                className={cn(
+   652→                  'flex flex-col items-center gap-1 h-auto py-2 rounded-xl',
+   653→                  paymentMethod === 'card'
+   654→                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+   655→                    : 'hover:bg-emerald-50 dark:hover:bg-emerald-950/30'
+   656→                )}
+   657→                onClick={() => setPaymentMethod('card')}
+   658→              >
+   659→                <CreditCard className="h-4 w-4" />
+   660→                <span className="text-[10px]">Kartu</span>
+   661→              </Button>
+   662→              <Button
+   663→                variant={paymentMethod === 'qris' ? 'default' : 'outline'}
+   664→                size="sm"
+   665→                className={cn(
+   666→                  'flex flex-col items-center gap-1 h-auto py-2 rounded-xl',
+   667→                  paymentMethod === 'qris'
+   668→                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+   669→                    : 'hover:bg-emerald-50 dark:hover:bg-emerald-950/30'
+   670→                )}
+   671→                onClick={() => setPaymentMethod('qris')}
+   672→              >
+   673→                <QrCode className="h-4 w-4" />
+   674→                <span className="text-[10px]">QRIS</span>
+   675→              </Button>
+   676→              <Button
+   677→                variant={paymentMethod === 'transfer' ? 'default' : 'outline'}
+   678→                size="sm"
+   679→                className={cn(
+   680→                  'flex flex-col items-center gap-1 h-auto py-2 rounded-xl',
+   681→                  paymentMethod === 'transfer'
+   682→                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+   683→                    : 'hover:bg-emerald-50 dark:hover:bg-emerald-950/30'
+   684→                )}
+   685→                onClick={() => setPaymentMethod('transfer')}
+   686→              >
+   687→                <ArrowRightLeft className="h-4 w-4" />
+   688→                <span className="text-[10px]">Transfer</span>
+   689→              </Button>
+   690→            </div>
+   691→          </div>
+   692→
+   693→          {/* Cash Payment */}
+   694→          {paymentMethod === 'cash' && (
+   695→            <div className="space-y-2">
+   696→              <Label className="text-sm font-medium">Uang Bayar</Label>
+   697→              <Input
+   698→                type="number"
+   699→                min="0"
+   700→                value={paidAmount}
+   701→                onChange={(e) => setPaidAmount(e.target.value)}
+   702→                placeholder="Masukkan jumlah bayar"
+   703→                className="h-10 text-base font-semibold"
+   704→              />
+   705→              {paid > 0 && (
+   706→                <div className="flex justify-between items-center">
+   707→                  <span className="text-sm text-muted-foreground">Kembalian</span>
+   708→                  <span
+   709→                    className={cn(
+   710→                      'font-bold text-base',
+   711→                      change < 0
+   712→                        ? 'text-red-500'
+   713→                        : 'text-emerald-600 dark:text-emerald-400'
+   714→                    )}
+   715→                  >
+   716→                    {change < 0 ? `-${formatRupiah(Math.abs(change))}` : formatRupiah(change)}
+   717→                  </span>
+   718→                </div>
+   719→              )}
+   720→              {/* Quick Cash Buttons */}
+   721→              {total > 0 && (
+   722→                <div className="flex flex-wrap gap-1.5">
+   723→                  {[total, Math.ceil(total / 10000) * 10000, Math.ceil(total / 50000) * 50000, Math.ceil(total / 100000) * 100000]
+   724→                    .filter((v, i, arr) => arr.indexOf(v) === i && v >= total)
+   725→                    .slice(0, 4)
+   726→                    .map((amount) => (
+   727→                      <Button
+   728→                        key={amount}
+   729→                        variant="outline"
+   730→                        size="sm"
+   731→                        className="h-7 text-xs rounded-lg"
+   732→                        onClick={() => setPaidAmount(String(amount))}
+   733→                      >
+   734→                        {formatRupiah(amount)}
+   735→                      </Button>
+   736→                    ))}
+   737→                </div>
+   738→              )}
+   739→            </div>
+   740→          )}
+   741→
+   742→          {/* Pay Button */}
+   743→          <Button
+   744→            className={cn(
+   745→              'w-full h-12 text-base font-bold rounded-xl shadow-lg transition-all',
+   746→              isPaymentValid && !processing
+   747→                ? 'bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98]'
+   748→                : 'bg-slate-300 dark:bg-slate-700 cursor-not-allowed'
+   749→            )}
+   750→            disabled={!isPaymentValid || processing}
+   751→            onClick={handlePayment}
+   752→          >
+   753→            {processing ? (
+   754→              <div className="flex items-center gap-2">
+   755→                <RefreshCw className="h-5 w-5 animate-spin" />
+   756→                Memproses...
+   757→              </div>
+   758→            ) : (
+   759→              <div className="flex items-center gap-2">
+   760→                <Banknote className="h-5 w-5" />
+   761→                Bayar {formatRupiah(total)}
+   762→              </div>
+   763→            )}
+   764→          </Button>
+   765→        </div>
+   766→      </div>
+   767→    </div>
+   768→  )
+   769→
+   770→  // ─── Product Card ────────────────────────────────────────────────────────
+   771→  const ProductCard = ({ product }: { product: Product }) => {
+   772→    const cartQty = getCartQuantity(product.id)
+   773→    const isOutOfStock = product.stock <= 0
+   774→    const stockColor = getStockColor(product.stock, product.minStock)
+   775→    const stockBg = getStockBgColor(product.stock, product.minStock)
+   776→
+   777→    return (
+   778→      <Card
+   779→        className={cn(
+   780→          'relative group cursor-pointer transition-all duration-200 overflow-hidden',
+   781→          'border border-slate-200/60 dark:border-slate-700/60',
+   782→          'bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm shadow-sm',
+   783→          isOutOfStock
+   784→            ? 'opacity-50 cursor-not-allowed'
+   785→            : 'hover:shadow-md hover:border-emerald-300/50 dark:hover:border-emerald-600/50 hover:-translate-y-0.5 active:scale-[0.98]',
+   786→          cartQty > 0 && 'ring-2 ring-emerald-500 border-emerald-300 dark:border-emerald-700'
+   787→        )}
+   788→        onClick={() => !isOutOfStock && addToCart(product)}
+   789→      >
+   790→        <CardContent className="p-3 sm:p-4 flex flex-col gap-2">
+   791→          {/* Product Image */}
+   792→          <div className="relative w-full h-24 rounded-lg overflow-hidden bg-muted/30">
+   793→            {product.image ? (
+   794→              <img
+   795→                src={product.image}
+   796→                alt={product.name}
+   797→                className="w-full h-full object-cover"
+   798→                onError={(e) => {
+   799→                  const target = e.target as HTMLImageElement
+   800→                  target.style.display = 'none'
+   801→                  const placeholder = target.nextElementSibling as HTMLElement
+   802→                  if (placeholder) placeholder.classList.remove('hidden')
+   803→                }}
+   804→              />
+   805→            ) : null}
+   806→            <div className={`w-full h-full flex items-center justify-center bg-muted/50 ${product.image ? 'hidden' : ''}`}>
+   807→              <Package className="h-8 w-8 text-muted-foreground/40" />
+   808→            </div>
+   809→            {/* Category Badge overlay */}
+   810→            <Badge
+   811→              variant="secondary"
+   812→              className="absolute top-1.5 left-1.5 text-[10px] px-1.5 py-0 h-5 rounded-md bg-white/90 dark:bg-slate-800/90 text-slate-600 dark:text-slate-300 backdrop-blur-sm"
+   813→            >
+   814→              {product.category?.name || 'Lainnya'}
+   815→            </Badge>
+   816→            {/* Cart Badge overlay */}
+   817→            {cartQty > 0 && (
+   818→              <Badge className="absolute top-1.5 right-1.5 bg-emerald-600 text-white h-5 w-5 p-0 flex items-center justify-center rounded-full text-[10px] font-bold">
+   819→                {cartQty}
+   820→              </Badge>
+   821→            )}
+   822→          </div>
+   823→
+   824→          {/* Product Name */}
+   825→          <h3 className="font-semibold text-sm leading-tight line-clamp-2 min-h-[2.5rem]">
+   826→            {product.name}
+   827→          </h3>
+   828→
+   829→          {/* Price */}
+   830→          <p className="font-bold text-emerald-700 dark:text-emerald-400 text-sm">
+   831→            {formatRupiah(product.price)}
+   832→          </p>
+   833→
+   834→          {/* Stock */}
+   835→          <div className={cn('flex items-center gap-1 rounded-lg px-2 py-1 w-fit', stockBg)}>
+   836→            <div
+   837→              className={cn(
+   838→                'h-1.5 w-1.5 rounded-full',
+   839→                product.stock <= 0
+   840→                  ? 'bg-red-500'
+   841→                  : product.stock <= product.minStock
+   842→                  ? 'bg-red-500'
+   843→                  : product.stock <= product.minStock * 2
+   844→                  ? 'bg-amber-500'
+   845→                  : 'bg-emerald-500'
+   846→              )}
+   847→            />
+   848→            <span className={cn('text-[10px] font-medium', stockColor)}>
+   849→              {product.stock <= 0 ? 'Habis' : `Stok: ${product.stock}`}
+   850→            </span>
+   851→          </div>
+   852→        </CardContent>
+   853→      </Card>
+   854→    )
+   855→  }
+   856→
+   857→  // ─── Product Grid Skeleton ───────────────────────────────────────────────
+   858→  const ProductGridSkeleton = () => (
+   859→    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+   860→      {Array.from({ length: 12 }).map((_, i) => (
+   861→        <Card key={i} className="overflow-hidden">
+   862→          <CardContent className="p-3 sm:p-4 space-y-3">
+   863→            <div className="flex items-center justify-between">
+   864→              <Skeleton className="h-5 w-16 rounded-md" />
+   865→            </div>
+   866→            <Skeleton className="h-4 w-full" />
+   867→            <Skeleton className="h-4 w-3/4" />
+   868→            <Skeleton className="h-5 w-24" />
+   869→            <Skeleton className="h-4 w-20 rounded-lg" />
+   870→          </CardContent>
+   871→        </Card>
+   872→      ))}
+   873→    </div>
+   874→  )
+   875→
+   876→  // ─── Success Dialog ──────────────────────────────────────────────────────
+   877→  const SuccessDialog = () => (
+   878→    <Dialog open={successDialog} onOpenChange={setSuccessDialog}>
+   879→      <DialogContent className="sm:max-w-md text-center" showCloseButton={false}>
+   880→        <DialogHeader className="items-center">
+   881→          <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/50">
+   882→            <CheckCircle2 className="h-12 w-12 text-emerald-600" />
+   883→          </div>
+   884→          <DialogTitle className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">
+   885→            Transaksi Berhasil!
+   886→          </DialogTitle>
+   887→          <DialogDescription className="text-sm text-muted-foreground mt-2">
+   888→            Pembayaran telah berhasil diproses
+   889→          </DialogDescription>
+   890→        </DialogHeader>
+   891→
+   892→        {lastTransaction && (
+   893→          <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 space-y-2 my-2">
+   894→            <div className="flex justify-between text-sm">
+   895→              <span className="text-muted-foreground">No. Invoice</span>
+   896→              <span className="font-mono font-semibold">{lastTransaction.invoiceNumber}</span>
+   897→            </div>
+   898→            <div className="flex justify-between text-sm">
+   899→              <span className="text-muted-foreground">Total</span>
+   900→              <span className="font-bold text-emerald-700 dark:text-emerald-400">
+   901→                {formatRupiah(lastTransaction.total)}
+   902→              </span>
+   903→            </div>
+   904→            <div className="flex justify-between text-sm">
+   905→              <span className="text-muted-foreground">Metode</span>
+   906→              <span className="font-medium">
+   907→                {paymentMethodLabel[lastTransaction.paymentMethod as PaymentMethod] || lastTransaction.paymentMethod}
+   908→              </span>
+   909→            </div>
+   910→            {lastTransaction.paymentMethod === 'cash' && lastTransaction.change > 0 && (
+   911→              <div className="flex justify-between text-sm">
+   912→                <span className="text-muted-foreground">Kembalian</span>
+   913→                <span className="font-bold text-blue-600 dark:text-blue-400">
+   914→                  {formatRupiah(lastTransaction.change)}
+   915→                </span>
+   916→              </div>
+   917→            )}
+   918→          </div>
+   919→        )}
+   920→
+   921→        <DialogFooter className="flex-col sm:flex-row gap-2 mt-2">
+   922→          <Button
+   923→            variant="outline"
+   924→            className="flex-1 rounded-xl"
+   925→            onClick={handlePrintReceipt}
+   926→          >
+   927→            <Receipt className="h-4 w-4 mr-2" />
+   928→            Cetak Struk
+   929→          </Button>
+   930→          <Button
+   931→            className="flex-1 bg-emerald-600 hover:bg-emerald-700 rounded-xl"
+   932→            onClick={handleNewTransaction}
+   933→          >
+   934→            Transaksi Baru
+   935→          </Button>
+   936→        </DialogFooter>
+   937→      </DialogContent>
+   938→    </Dialog>
+   939→  )
+   940→
+   941→  // ─── Mobile Floating Cart Button ─────────────────────────────────────────
+   942→  const MobileCartButton = () => (
+   943→    <Button
+   944→      className="fixed bottom-6 right-6 z-40 h-14 w-14 rounded-full shadow-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 transition-all"
+   945→      size="icon"
+   946→      onClick={() => setCartOpen(true)}
+   947→    >
+   948→      <ShoppingCart className="h-6 w-6" />
+   949→      {cartItemCount > 0 && (
+   950→        <Badge className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold border-2 border-white dark:border-slate-900">
+   951→          {cartItemCount}
+   952→        </Badge>
+   953→      )}
+   954→    </Button>
+   955→  )
+   956→
+   957→  // ─── Mobile Cart Sheet ───────────────────────────────────────────────────
+   958→  const MobileCartSheet = () => (
+   959→    <Sheet open={cartOpen} onOpenChange={setCartOpen}>
+   960→      <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col">
+   961→        <SheetHeader className="sr-only">
+   962→          <SheetTitle>Keranjang Belanja</SheetTitle>
+   963→          <SheetDescription>Keranjang belanja Anda</SheetDescription>
+   964→        </SheetHeader>
+   965→        {cartContent}
+   966→      </SheetContent>
+   967→    </Sheet>
+   968→  )
+   969→
+   970→  // ─── Render ──────────────────────────────────────────────────────────────
+   971→  return (
+   972→    <div className="h-screen flex flex-col bg-gradient-to-br from-slate-50 via-emerald-50/30 to-slate-50 dark:from-slate-950 dark:via-emerald-950/20 dark:to-slate-950">
+   973→      {/* Main Content Area */}
+   974→      <div className="flex-1 flex overflow-hidden">
+   975→        {/* Left Panel - Product Selection */}
+   976→        <div className={cn(
+   977→          'flex flex-col h-full overflow-hidden',
+   978→          isMobile ? 'w-full' : 'w-[60%]'
+   979→        )}>
+   980→          {/* Search & Filter Bar */}
+   981→          <div className="p-3 sm:p-4 space-y-3 border-b bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm">
+   982→            {/* Search */}
+   983→            <div className="relative">
+   984→              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   985→              <Input
+   986→                type="text"
+   987→                placeholder="Cari produk atau barcode..."
+   988→                value={searchQuery}
+   989→                onChange={(e) => setSearchQuery(e.target.value)}
+   990→                className="pl-10 h-10 rounded-xl bg-white/80 dark:bg-slate-800/80 border-slate-200/60 dark:border-slate-700/60 focus:border-emerald-400 focus:ring-emerald-400/20"
+   991→              />
+   992→              {searchQuery && (
+   993→                <Button
+   994→                  variant="ghost"
+   995→                  size="icon"
+   996→                  className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8"
+   997→                  onClick={() => setSearchQuery('')}
+   998→                >
+   999→                  <X className="h-3.5 w-3.5" />
+  1000→                </Button>
+  1001→              )}
+  1002→            </div>
+  1003→
+  1004→            {/* Category Filter */}
+  1005→            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+  1006→              <Button
+  1007→                variant={selectedCategory === 'all' ? 'default' : 'outline'}
+  1008→                size="sm"
+  1009→                className={cn(
+  1010→                  'rounded-full whitespace-nowrap px-4 h-8 text-xs font-medium shrink-0 transition-all',
+  1011→                  selectedCategory === 'all'
+  1012→                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm'
+  1013→                    : 'hover:bg-emerald-50 dark:hover:bg-emerald-950/30 border-slate-200/60 dark:border-slate-700/60'
+  1014→                )}
+  1015→                onClick={() => setSelectedCategory('all')}
+  1016→              >
+  1017→                Semua
+  1018→              </Button>
+  1019→              {categories.map((cat) => (
+  1020→                <Button
+  1021→                  key={cat.id}
+  1022→                  variant={selectedCategory === cat.id ? 'default' : 'outline'}
+  1023→                  size="sm"
+  1024→                  className={cn(
+  1025→                    'rounded-full whitespace-nowrap px-4 h-8 text-xs font-medium shrink-0 transition-all',
+  1026→                    selectedCategory === cat.id
+  1027→                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm'
+  1028→                      : 'hover:bg-emerald-50 dark:hover:bg-emerald-950/30 border-slate-200/60 dark:border-slate-700/60'
+  1029→                  )}
+  1030→                  onClick={() => setSelectedCategory(cat.id)}
+  1031→                >
+  1032→                  {cat.name}
+  1033→                  <span className="ml-1 opacity-70">({cat.productCount})</span>
+  1034→                </Button>
+  1035→              ))}
+  1036→            </div>
+  1037→          </div>
+  1038→
+  1039→          {/* Product Grid */}
+  1040→          <div className="flex-1 overflow-auto p-3 sm:p-4">
+  1041→            {loading ? (
+  1042→              <ProductGridSkeleton />
+  1043→            ) : filteredProducts.length === 0 ? (
+  1044→              <div className="flex flex-col items-center justify-center h-full text-muted-foreground py-12">
+  1045→                <Search className="h-12 w-12 mb-3 opacity-30" />
+  1046→                <p className="text-sm font-medium">Produk tidak ditemukan</p>
+  1047→                <p className="text-xs mt-1">
+  1048→                  Coba ubah kata kunci atau kategori pencarian
+  1049→                </p>
+  1050→              </div>
+  1051→            ) : (
+  1052→              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+  1053→                {filteredProducts.map((product) => (
+  1054→                  <ProductCard key={product.id} product={product} />
+  1055→                ))}
+  1056→              </div>
+  1057→            )}
+  1058→          </div>
+  1059→        </div>
+  1060→
+  1061→        {/* Right Panel - Cart (Desktop Only) */}
+  1062→        {!isMobile && (
+  1063→          <div className="w-[40%] h-full border-l border-slate-200/60 dark:border-slate-700/60 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm flex flex-col">
+  1064→            {cartContent}
+  1065→          </div>
+  1066→        )}
+  1067→      </div>
+  1068→
+  1069→      {/* Mobile Cart Button & Sheet */}
+  1070→      {isMobile && <MobileCartButton />}
+  1071→      {isMobile && <MobileCartSheet />}
+  1072→
+  1073→      {/* Success Dialog */}
+  1074→      <SuccessDialog />
+  1075→    </div>
+  1076→  )
+  1077→}
+  1078→

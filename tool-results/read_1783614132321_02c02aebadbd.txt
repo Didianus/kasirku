@@ -1,0 +1,1136 @@
+     1→     1→'use client'
+     2→     2→
+     3→     3→import React, { useState, useEffect, useCallback, useMemo } from 'react'
+     4→     4→import {
+     5→     5→  ColumnDef,
+     6→     6→  useReactTable,
+     7→     7→  getCoreRowModel,
+     8→     8→  getSortedRowModel,
+     9→     9→  getPaginationRowModel,
+    10→    10→  getFilteredRowModel,
+    11→    11→  flexRender,
+    12→    12→  SortingState,
+    13→    13→  Column,
+    14→    14→} from '@tanstack/react-table'
+    15→    15→import { useForm } from 'react-hook-form'
+    16→    16→import { zodResolver } from '@hookform/resolvers/zod'
+    17→    17→import { z } from 'zod'
+    18→    18→import {
+    19→    19→  Plus,
+    20→    20→  Search,
+    21→    21→  Pencil,
+    22→    22→  Trash2,
+    23→    23→  Package,
+    24→    24→  Filter,
+    25→    25→  ChevronUp,
+    26→    26→  ChevronDown,
+    27→    27→  ChevronsUpDown,
+    28→    28→  ChevronLeft,
+    29→    29→  ChevronRight,
+    30→    30→  Download,
+    31→    31→  Upload,
+    32→    32→  RefreshCw,
+    33→    33→  Loader2,
+    34→    34→} from 'lucide-react'
+    35→    35→import { Button } from '@/components/ui/button'
+    36→    36→import { Input } from '@/components/ui/input'
+    37→    37→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+    38→    38→import { Badge } from '@/components/ui/badge'
+    39→    39→import { Label } from '@/components/ui/label'
+    40→    40→import { Skeleton } from '@/components/ui/skeleton'
+    41→    41→import {
+    42→    42→  Table,
+    43→    43→  TableBody,
+    44→    44→  TableCell,
+    45→    45→  TableHead,
+    46→    46→  TableHeader,
+    47→    47→  TableRow,
+    48→    48→} from '@/components/ui/table'
+    49→    49→import {
+    50→    50→  Dialog,
+    51→    51→  DialogContent,
+    52→    52→  DialogHeader,
+    53→    53→  DialogTitle,
+    54→    54→  DialogDescription,
+    55→    55→  DialogFooter,
+    56→    56→} from '@/components/ui/dialog'
+    57→    57→import {
+    58→    58→  AlertDialog,
+    59→    59→  AlertDialogAction,
+    60→    60→  AlertDialogCancel,
+    61→    61→  AlertDialogContent,
+    62→    62→  AlertDialogDescription,
+    63→    63→  AlertDialogFooter,
+    64→    64→  AlertDialogHeader,
+    65→    65→  AlertDialogTitle,
+    66→    66→} from '@/components/ui/alert-dialog'
+    67→    67→import {
+    68→    68→  Select,
+    69→    69→  SelectContent,
+    70→    70→  SelectItem,
+    71→    71→  SelectTrigger,
+    72→    72→  SelectValue,
+    73→    73→} from '@/components/ui/select'
+    74→    74→import {
+    75→    75→  Form,
+    76→    76→  FormControl,
+    77→    77→  FormField,
+    78→    78→  FormItem,
+    79→    79→  FormLabel,
+    80→    80→  FormMessage,
+    81→    81→} from '@/components/ui/form'
+    82→    82→import { toast } from 'sonner'
+    83→    83→import { cn } from '@/lib/utils'
+    84→    84→
+    85→    85→// ─── Types ───────────────────────────────────────────────────────────────────
+    86→    86→
+    87→    87→interface PosProdukProps {
+    88→    88→  user: {
+    89→    89→    id: string
+    90→    90→    name: string
+    91→    91→    email: string
+    92→    92→    role: string
+    93→    93→  }
+    94→    94→}
+    95→    95→
+    96→    96→type Product = {
+    97→    97→  id: string
+    98→    98→  name: string
+    99→    99→  barcode: string | null
+   100→   100→  description: string | null
+   101→   101→  price: number
+   102→   102→  costPrice: number
+   103→   103→  stock: number
+   104→   104→  minStock: number
+   105→   105→  unit: string
+   106→   106→  categoryId: string
+   107→   107→  image: string | null
+   108→   108→  active: boolean
+   109→   109→  createdAt: string
+   110→   110→  updatedAt: string
+   111→   111→  category: {
+   112→   112→    id: string
+   113→   113→    name: string
+   114→   114→    icon: string | null
+   115→   115→    color: string | null
+   116→   116→  }
+   117→   117→}
+   118→   118→
+   119→   119→type Category = {
+   120→   120→  id: string
+   121→   121→  name: string
+   122→   122→  icon: string | null
+   123→   123→  color: string | null
+   124→   124→  productCount: number
+   125→   125→}
+   126→   126→
+   127→   127→// ─── Helper ──────────────────────────────────────────────────────────────────
+   128→   128→
+   129→   129→function formatRupiah(amount: number): string {
+   130→   130→  return new Intl.NumberFormat('id-ID', {
+   131→   131→    style: 'currency',
+   132→   132→    currency: 'IDR',
+   133→   133→    minimumFractionDigits: 0,
+   134→   134→  }).format(amount)
+   135→   135→}
+   136→   136→
+   137→   137→// ─── Zod Schemas ─────────────────────────────────────────────────────────────
+   138→   138→
+   139→   139→const productFormSchema = z.object({
+   140→   140→  name: z.string().min(1, 'Nama produk wajib diisi'),
+   141→   141→  barcode: z.string().optional(),
+   142→   142→  description: z.string().optional(),
+   143→   143→  price: z.coerce.number().positive('Harga harus lebih dari 0'),
+   144→   144→  costPrice: z.coerce.number().min(0, 'Modal tidak boleh negatif').optional(),
+   145→   145→  stock: z.coerce.number().int().min(0, 'Stok tidak boleh negatif').optional(),
+   146→   146→  minStock: z.coerce.number().int().min(0, 'Min stok tidak boleh negatif').optional(),
+   147→   147→  unit: z.string().min(1, 'Satuan wajib diisi').optional(),
+   148→   148→  categoryId: z.string().min(1, 'Kategori wajib dipilih'),
+   149→   149→  image: z.string().optional(),
+   150→   150→})
+   151→   151→
+   152→   152→type ProductFormValues = z.infer<typeof productFormSchema>
+   153→   153→
+   154→   154→// ─── Sort Header Component ──────────────────────────────────────────────────
+   155→   155→
+   156→   156→function SortableHeader({ column, children }: { column: Column<Product, unknown>; children: React.ReactNode }) {
+   157→   157→  const isSorted = column.getIsSorted()
+   158→   158→  return (
+   159→   159→    <Button
+   160→   160→      variant="ghost"
+   161→   161→      size="sm"
+   162→   162→      className="-ml-3 h-8 data-[state=open]:bg-accent"
+   163→   163→      onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+   164→   164→    >
+   165→   165→      {children}
+   166→   166→      {isSorted === 'asc' ? (
+   167→   167→        <ChevronUp className="ml-1 h-4 w-4" />
+   168→   168→      ) : isSorted === 'desc' ? (
+   169→   169→        <ChevronDown className="ml-1 h-4 w-4" />
+   170→   170→      ) : (
+   171→   171→        <ChevronsUpDown className="ml-1 h-4 w-4 opacity-50" />
+   172→   172→      )}
+   173→   173→    </Button>
+   174→   174→  )
+   175→   175→}
+   176→   176→
+   177→   177→// ─── Stock Badge ─────────────────────────────────────────────────────────────
+   178→   178→
+   179→   179→function StockBadge({ stock, minStock }: { stock: number; minStock: number }) {
+   180→   180→  if (stock === 0) {
+   181→   181→    return <Badge variant="destructive" className="text-xs">Habis</Badge>
+   182→   182→  }
+   183→   183→  if (stock <= minStock) {
+   184→   184→    return (
+   185→   185→      <Badge className="text-xs bg-yellow-500/15 text-yellow-700 dark:text-yellow-400 border-yellow-500/25 hover:bg-yellow-500/25">
+   186→   186→        Rendah
+   187→   187→      </Badge>
+   188→   188→    )
+   189→   189→  }
+   190→   190→  return (
+   191→   191→    <Badge className="text-xs bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/25 hover:bg-emerald-500/25">
+   192→   192→      Normal
+   193→   193→    </Badge>
+   194→   194→  )
+   195→   195→}
+   196→   196→
+   197→   197→// ─── Status Badge ────────────────────────────────────────────────────────────
+   198→   198→
+   199→   199→function StatusBadge({ active }: { active: boolean }) {
+   200→   200→  if (active) {
+   201→   201→    return (
+   202→   202→      <Badge className="text-xs bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/25 hover:bg-emerald-500/25">
+   203→   203→        Aktif
+   204→   204→      </Badge>
+   205→   205→    )
+   206→   206→  }
+   207→   207→  return (
+   208→   208→    <Badge variant="destructive" className="text-xs">
+   209→   209→      Nonaktif
+   210→   210→    </Badge>
+   211→   211→  )
+   212→   212→}
+   213→   213→
+   214→   214→// ─── Product Form Dialog ────────────────────────────────────────────────────
+   215→   215→
+   216→   216→function ProductFormDialog({
+   217→   217→  open,
+   218→   218→  onOpenChange,
+   219→   219→  product,
+   220→   220→  categories,
+   221→   221→  onSuccess,
+   222→   222→}: {
+   223→   223→  open: boolean
+   224→   224→  onOpenChange: (open: boolean) => void
+   225→   225→  product?: Product | null
+   226→   226→  categories: Category[]
+   227→   227→  onSuccess: () => void
+   228→   228→}) {
+   229→   229→  const isEdit = !!product
+   230→   230→  const [submitting, setSubmitting] = useState(false)
+   231→   231→
+   232→   232→  const form = useForm<ProductFormValues>({
+   233→   233→    resolver: zodResolver(productFormSchema),
+   234→   234→    defaultValues: {
+   235→   235→      name: product?.name ?? '',
+   236→   236→      barcode: product?.barcode ?? '',
+   237→   237→      description: product?.description ?? '',
+   238→   238→      price: product?.price ?? 0,
+   239→   239→      costPrice: product?.costPrice ?? 0,
+   240→   240→      stock: product?.stock ?? 0,
+   241→   241→      minStock: product?.minStock ?? 5,
+   242→   242→      unit: product?.unit ?? 'pcs',
+   243→   243→      categoryId: product?.categoryId ?? '',
+   244→   244→      image: product?.image ?? '',
+   245→   245→    },
+   246→   246→  })
+   247→   247→
+   248→   248→  // Reset form when dialog opens or product changes
+   249→   249→  useEffect(() => {
+   250→   250→    if (open) {
+   251→   251→      form.reset({
+   252→   252→        name: product?.name ?? '',
+   253→   253→        barcode: product?.barcode ?? '',
+   254→   254→        description: product?.description ?? '',
+   255→   255→        price: product?.price ?? 0,
+   256→   256→        costPrice: product?.costPrice ?? 0,
+   257→   257→        stock: product?.stock ?? 0,
+   258→   258→        minStock: product?.minStock ?? 5,
+   259→   259→        unit: product?.unit ?? 'pcs',
+   260→   260→        categoryId: product?.categoryId ?? '',
+   261→   261→        image: product?.image ?? '',
+   262→   262→      })
+   263→   263→    }
+   264→   264→  }, [open, product, form])
+   265→   265→
+   266→   266→  const onSubmit = async (values: ProductFormValues) => {
+   267→   267→    setSubmitting(true)
+   268→   268→    try {
+   269→   269→      const url = isEdit ? `/api/products/${product.id}` : '/api/products'
+   270→   270→      const method = isEdit ? 'PUT' : 'POST'
+   271→   271→
+   272→   272→      const res = await fetch(url, {
+   273→   273→        method,
+   274→   274→        headers: { 'Content-Type': 'application/json' },
+   275→   275→        body: JSON.stringify(values),
+   276→   276→      })
+   277→   277→
+   278→   278→      const data = await res.json()
+   279→   279→
+   280→   280→      if (!res.ok) {
+   281→   281→        toast.error(data.error || 'Terjadi kesalahan')
+   282→   282→        return
+   283→   283→      }
+   284→   284→
+   285→   285→      toast.success(isEdit ? 'Produk berhasil diperbarui' : 'Produk berhasil ditambahkan')
+   286→   286→      onOpenChange(false)
+   287→   287→      onSuccess()
+   288→   288→    } catch {
+   289→   289→      toast.error('Terjadi kesalahan jaringan')
+   290→   290→    } finally {
+   291→   291→      setSubmitting(false)
+   292→   292→    }
+   293→   293→  }
+   294→   294→
+   295→   295→  return (
+   296→   296→    <Dialog open={open} onOpenChange={onOpenChange}>
+   297→   297→      <DialogContent className="sm:max-w-[525px] max-h-[90vh] overflow-y-auto glass-card">
+   298→   298→        <DialogHeader>
+   299→   299→          <DialogTitle className="flex items-center gap-2">
+   300→   300→            <Package className="h-5 w-5 text-primary" />
+   301→   301→            {isEdit ? 'Edit Produk' : 'Tambah Produk Baru'}
+   302→   302→          </DialogTitle>
+   303→   303→          <DialogDescription>
+   304→   304→            {isEdit ? 'Perbarui informasi produk.' : 'Isi detail produk baru.'}
+   305→   305→          </DialogDescription>
+   306→   306→        </DialogHeader>
+   307→   307→
+   308→   308→        <Form {...form}>
+   309→   309→          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+   310→   310→            {/* Name */}
+   311→   311→            <FormField
+   312→   312→              control={form.control}
+   313→   313→              name="name"
+   314→   314→              render={({ field }) => (
+   315→   315→                <FormItem>
+   316→   316→                  <FormLabel>Nama Produk *</FormLabel>
+   317→   317→                  <FormControl>
+   318→   318→                    <Input placeholder="Masukkan nama produk" {...field} />
+   319→   319→                  </FormControl>
+   320→   320→                  <FormMessage />
+   321→   321→                </FormItem>
+   322→   322→              )}
+   323→   323→            />
+   324→   324→
+   325→   325→            {/* Barcode & Category */}
+   326→   326→            <div className="grid grid-cols-2 gap-4">
+   327→   327→              <FormField
+   328→   328→                control={form.control}
+   329→   329→                name="barcode"
+   330→   330→                render={({ field }) => (
+   331→   331→                  <FormItem>
+   332→   332→                    <FormLabel>Barcode</FormLabel>
+   333→   333→                    <FormControl>
+   334→   334→                      <Input placeholder="Scan atau ketik barcode" {...field} />
+   335→   335→                    </FormControl>
+   336→   336→                    <FormMessage />
+   337→   337→                  </FormItem>
+   338→   338→                )}
+   339→   339→              />
+   340→   340→
+   341→   341→              <FormField
+   342→   342→                control={form.control}
+   343→   343→                name="categoryId"
+   344→   344→                render={({ field }) => (
+   345→   345→                  <FormItem>
+   346→   346→                    <FormLabel>Kategori *</FormLabel>
+   347→   347→                    <Select onValueChange={field.onChange} value={field.value}>
+   348→   348→                      <FormControl>
+   349→   349→                        <SelectTrigger className="w-full">
+   350→   350→                          <SelectValue placeholder="Pilih kategori" />
+   351→   351→                        </SelectTrigger>
+   352→   352→                      </FormControl>
+   353→   353→                      <SelectContent>
+   354→   354→                        {categories.map((cat) => (
+   355→   355→                          <SelectItem key={cat.id} value={cat.id}>
+   356→   356→                            {cat.name}
+   357→   357→                          </SelectItem>
+   358→   358→                        ))}
+   359→   359→                      </SelectContent>
+   360→   360→                    </Select>
+   361→   361→                    <FormMessage />
+   362→   362→                  </FormItem>
+   363→   363→                )}
+   364→   364→              />
+   365→   365→            </div>
+   366→   366→
+   367→   367→            {/* Description */}
+   368→   368→            <FormField
+   369→   369→              control={form.control}
+   370→   370→              name="description"
+   371→   371→              render={({ field }) => (
+   372→   372→                <FormItem>
+   373→   373→                  <FormLabel>Deskripsi</FormLabel>
+   374→   374→                  <FormControl>
+   375→   375→                    <Input placeholder="Deskripsi produk (opsional)" {...field} />
+   376→   376→                  </FormControl>
+   377→   377→                  <FormMessage />
+   378→   378→                </FormItem>
+   379→   379→              )}
+   380→   380→            />
+   381→   381→
+   382→   382→            {/* Image URL */}
+   383→   383→            <FormField
+   384→   384→              control={form.control}
+   385→   385→              name="image"
+   386→   386→              render={({ field }) => (
+   387→   387→                <FormItem>
+   388→   388→                  <FormLabel>Gambar Produk</FormLabel>
+   389→   389→                  <FormControl>
+   390→   390→                    <Input placeholder="URL gambar produk (opsional)" {...field} />
+   391→   391→                  </FormControl>
+   392→   392→                  <FormMessage />
+   393→   393→                  {field.value && (
+   394→   394→                    <div className="mt-2">
+   395→   395→                      <img
+   396→   396→                        src={field.value}
+   397→   397→                        alt="Preview"
+   398→   398→                        className="h-16 w-16 rounded-lg object-cover border"
+   399→   399→                        onError={(e) => {
+   400→   400→                          (e.target as HTMLImageElement).style.display = 'none'
+   401→   401→                        }}
+   402→   402→                      />
+   403→   403→                    </div>
+   404→   404→                  )}
+   405→   405→                </FormItem>
+   406→   406→              )}
+   407→   407→            />
+   408→   408→
+   409→   409→            {/* Price & Cost Price */}
+   410→   410→            <div className="grid grid-cols-2 gap-4">
+   411→   411→              <FormField
+   412→   412→                control={form.control}
+   413→   413→                name="price"
+   414→   414→                render={({ field }) => (
+   415→   415→                  <FormItem>
+   416→   416→                    <FormLabel>Harga Jual *</FormLabel>
+   417→   417→                    <FormControl>
+   418→   418→                      <Input
+   419→   419→                        type="number"
+   420→   420→                        placeholder="0"
+   421→   421→                        min="0"
+   422→   422→                        {...field}
+   423→   423→                        onChange={(e) => field.onChange(e.target.value === '' ? 0 : Number(e.target.value))}
+   424→   424→                      />
+   425→   425→                    </FormControl>
+   426→   426→                    <FormMessage />
+   427→   427→                  </FormItem>
+   428→   428→                )}
+   429→   429→              />
+   430→   430→
+   431→   431→              <FormField
+   432→   432→                control={form.control}
+   433→   433→                name="costPrice"
+   434→   434→                render={({ field }) => (
+   435→   435→                  <FormItem>
+   436→   436→                    <FormLabel>Harga Modal</FormLabel>
+   437→   437→                    <FormControl>
+   438→   438→                      <Input
+   439→   439→                        type="number"
+   440→   440→                        placeholder="0"
+   441→   441→                        min="0"
+   442→   442→                        {...field}
+   443→   443→                        onChange={(e) => field.onChange(e.target.value === '' ? 0 : Number(e.target.value))}
+   444→   444→                      />
+   445→   445→                    </FormControl>
+   446→   446→                    <FormMessage />
+   447→   447→                  </FormItem>
+   448→   448→                )}
+   449→   449→              />
+   450→   450→            </div>
+   451→   451→
+   452→   452→            {/* Stock, Min Stock, Unit */}
+   453→   453→            <div className="grid grid-cols-3 gap-4">
+   454→   454→              <FormField
+   455→   455→                control={form.control}
+   456→   456→                name="stock"
+   457→   457→                render={({ field }) => (
+   458→   458→                  <FormItem>
+   459→   459→                    <FormLabel>Stok</FormLabel>
+   460→   460→                    <FormControl>
+   461→   461→                      <Input
+   462→   462→                        type="number"
+   463→   463→                        placeholder="0"
+   464→   464→                        min="0"
+   465→   465→                        {...field}
+   466→   466→                        onChange={(e) => field.onChange(e.target.value === '' ? 0 : Number(e.target.value))}
+   467→   467→                      />
+   468→   468→                    </FormControl>
+   469→   469→                    <FormMessage />
+   470→   470→                  </FormItem>
+   471→   471→                )}
+   472→   472→              />
+   473→   473→
+   474→   474→              <FormField
+   475→   475→                control={form.control}
+   476→   476→                name="minStock"
+   477→   477→                render={({ field }) => (
+   478→   478→                  <FormItem>
+   479→   479→                    <FormLabel>Min Stok</FormLabel>
+   480→   480→                    <FormControl>
+   481→   481→                      <Input
+   482→   482→                        type="number"
+   483→   483→                        placeholder="5"
+   484→   484→                        min="0"
+   485→   485→                        {...field}
+   486→   486→                        onChange={(e) => field.onChange(e.target.value === '' ? 0 : Number(e.target.value))}
+   487→   487→                      />
+   488→   488→                    </FormControl>
+   489→   489→                    <FormMessage />
+   490→   490→                  </FormItem>
+   491→   491→                )}
+   492→   492→              />
+   493→   493→
+   494→   494→              <FormField
+   495→   495→                control={form.control}
+   496→   496→                name="unit"
+   497→   497→                render={({ field }) => (
+   498→   498→                  <FormItem>
+   499→   499→                    <FormLabel>Satuan</FormLabel>
+   500→   500→                    <Select onValueChange={field.onChange} value={field.value || 'pcs'}>
+   501→   501→                      <FormControl>
+   502→   502→                        <SelectTrigger className="w-full">
+   503→   503→                          <SelectValue placeholder="Pilih" />
+   504→   504→                        </SelectTrigger>
+   505→   505→                      </FormControl>
+   506→   506→                      <SelectContent>
+   507→   507→                        <SelectItem value="pcs">Pcs</SelectItem>
+   508→   508→                        <SelectItem value="kg">Kg</SelectItem>
+   509→   509→                        <SelectItem value="liter">Liter</SelectItem>
+   510→   510→                        <SelectItem value="pack">Pack</SelectItem>
+   511→   511→                        <SelectItem value="box">Box</SelectItem>
+   512→   512→                        <SelectItem value="lusin">Lusin</SelectItem>
+   513→   513→                        <SelectItem value="set">Set</SelectItem>
+   514→   514→                        <SelectItem value="rim">Rim</SelectItem>
+   515→   515→                      </SelectContent>
+   516→   516→                    </Select>
+   517→   517→                    <FormMessage />
+   518→   518→                  </FormItem>
+   519→   519→                )}
+   520→   520→              />
+   521→   521→            </div>
+   522→   522→
+   523→   523→            <DialogFooter className="pt-4">
+   524→   524→              <Button
+   525→   525→                type="button"
+   526→   526→                variant="outline"
+   527→   527→                onClick={() => onOpenChange(false)}
+   528→   528→                disabled={submitting}
+   529→   529→              >
+   530→   530→                Batal
+   531→   531→              </Button>
+   532→   532→              <Button type="submit" disabled={submitting}>
+   533→   533→                {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+   534→   534→                {isEdit ? 'Simpan Perubahan' : 'Tambah Produk'}
+   535→   535→              </Button>
+   536→   536→            </DialogFooter>
+   537→   537→          </form>
+   538→   538→        </Form>
+   539→   539→      </DialogContent>
+   540→   540→    </Dialog>
+   541→   541→  )
+   542→   542→}
+   543→   543→
+   544→   544→// ─── Main Component ──────────────────────────────────────────────────────────
+   545→   545→
+   546→   546→export function PosProduk({ user }: PosProdukProps) {
+   547→   547→  // State
+   548→   548→  const [products, setProducts] = useState<Product[]>([])
+   549→   549→  const [categories, setCategories] = useState<Category[]>([])
+   550→   550→  const [totalProducts, setTotalProducts] = useState(0)
+   551→   551→  const [totalPages, setTotalPages] = useState(1)
+   552→   552→  const [loading, setLoading] = useState(true)
+   553→   553→  const [refreshing, setRefreshing] = useState(false)
+   554→   554→
+   555→   555→  // Filters
+   556→   556→  const [search, setSearch] = useState('')
+   557→   557→  const [filterCategory, setFilterCategory] = useState<string>('all')
+   558→   558→  const [filterStatus, setFilterStatus] = useState<string>('all')
+   559→   559→
+   560→   560→  // Pagination
+   561→   561→  const [currentPage, setCurrentPage] = useState(1)
+   562→   562→  const pageSize = 20
+   563→   563→
+   564→   564→  // Sorting
+   565→   565→  const [sorting, setSorting] = useState<SortingState>([])
+   566→   566→
+   567→   567→  // Dialogs
+   568→   568→  const [addDialogOpen, setAddDialogOpen] = useState(false)
+   569→   569→  const [editProduct, setEditProduct] = useState<Product | null>(null)
+   570→   570→  const [deleteProduct, setDeleteProduct] = useState<Product | null>(null)
+   571→   571→  const [deleting, setDeleting] = useState(false)
+   572→   572→
+   573→   573→  // Fetch categories
+   574→   574→  const fetchCategories = useCallback(async () => {
+   575→   575→    try {
+   576→   576→      const res = await fetch('/api/categories')
+   577→   577→      if (res.ok) {
+   578→   578→        const data = await res.json()
+   579→   579→        setCategories(data.categories || [])
+   580→   580→      }
+   581→   581→    } catch {
+   582→   582→      // silent fail for categories
+   583→   583→    }
+   584→   584→  }, [])
+   585→   585→
+   586→   586→  // Fetch products
+   587→   587→  const fetchProducts = useCallback(async (showRefresh = false) => {
+   588→   588→    if (showRefresh) setRefreshing(true)
+   589→   589→    else setLoading(true)
+   590→   590→
+   591→   591→    try {
+   592→   592→      const params = new URLSearchParams()
+   593→   593→      if (search) params.set('search', search)
+   594→   594→      if (filterCategory && filterCategory !== 'all') params.set('categoryId', filterCategory)
+   595→   595→      if (filterStatus && filterStatus !== 'all') params.set('active', filterStatus)
+   596→   596→      params.set('page', String(currentPage))
+   597→   597→      params.set('limit', String(pageSize))
+   598→   598→
+   599→   599→      const res = await fetch(`/api/products?${params.toString()}`)
+   600→   600→      if (res.ok) {
+   601→   601→        const data = await res.json()
+   602→   602→        setProducts(data.products || [])
+   603→   603→        setTotalProducts(data.total || 0)
+   604→   604→        setTotalPages(data.totalPages || 1)
+   605→   605→      }
+   606→   606→    } catch {
+   607→   607→      toast.error('Gagal memuat data produk')
+   608→   608→    } finally {
+   609→   609→      setLoading(false)
+   610→   610→      setRefreshing(false)
+   611→   611→    }
+   612→   612→  }, [search, filterCategory, filterStatus, currentPage])
+   613→   613→
+   614→   614→  useEffect(() => {
+   615→   615→    fetchCategories()
+   616→   616→  }, [fetchCategories])
+   617→   617→
+   618→   618→  useEffect(() => {
+   619→   619→    fetchProducts()
+   620→   620→  }, [fetchProducts])
+   621→   621→
+   622→   622→  // Reset page when filters change
+   623→   623→  useEffect(() => {
+   624→   624→    setCurrentPage(1)
+   625→   625→  }, [search, filterCategory, filterStatus])
+   626→   626→
+   627→   627→  // Delete handler
+   628→   628→  const handleDelete = async () => {
+   629→   629→    if (!deleteProduct) return
+   630→   630→    setDeleting(true)
+   631→   631→    try {
+   632→   632→      const res = await fetch(`/api/products/${deleteProduct.id}`, { method: 'DELETE' })
+   633→   633→      const data = await res.json()
+   634→   634→      if (!res.ok) {
+   635→   635→        toast.error(data.error || 'Gagal menghapus produk')
+   636→   636→        return
+   637→   637→      }
+   638→   638→      toast.success('Produk berhasil dinonaktifkan')
+   639→   639→      setDeleteProduct(null)
+   640→   640→      fetchProducts()
+   641→   641→    } catch {
+   642→   642→      toast.error('Terjadi kesalahan jaringan')
+   643→   643→    } finally {
+   644→   644→      setDeleting(false)
+   645→   645→    }
+   646→   646→  }
+   647→   647→
+   648→   648→  // Column definitions
+   649→   649→  const columns = useMemo<ColumnDef<Product, unknown>[]>(
+   650→   650→    () => [
+   651→   651→      {
+   652→   652→        accessorKey: 'name',
+   653→   653→        header: ({ column }) => <SortableHeader column={column}>Nama Produk</SortableHeader>,
+   654→   654→        cell: ({ row }) => (
+   655→   655→          <div className="flex items-center gap-3">
+   656→   656→            {row.original.image ? (
+   657→   657→              <img
+   658→   658→                src={row.original.image}
+   659→   659→                alt={row.original.name}
+   660→   660→                className="h-10 w-10 shrink-0 rounded-lg object-cover border border-border/50"
+   661→   661→                onError={(e) => {
+   662→   662→                  const target = e.target as HTMLImageElement
+   663→   663→                  target.style.display = 'none'
+   664→   664→                  target.nextElementSibling?.classList.remove('hidden')
+   665→   665→                }}
+   666→   666→              />
+   667→   667→            ) : null}
+   668→   668→            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary ${row.original.image ? 'hidden' : ''}`}>
+   669→   669→              <Package className="h-4 w-4" />
+   670→   670→            </div>
+   671→   671→            <div className="min-w-0">
+   672→   672→              <p className="font-medium text-sm truncate max-w-[200px]">{row.original.name}</p>
+   673→   673→              {row.original.description && (
+   674→   674→                <p className="text-xs text-muted-foreground truncate max-w-[200px]">
+   675→   675→                  {row.original.description}
+   676→   676→                </p>
+   677→   677→              )}
+   678→   678→            </div>
+   679→   679→          </div>
+   680→   680→        ),
+   681→   681→      },
+   682→   682→      {
+   683→   683→        accessorKey: 'barcode',
+   684→   684→        header: ({ column }) => <SortableHeader column={column}>Barcode</SortableHeader>,
+   685→   685→        cell: ({ row }) => (
+   686→   686→          <span className="font-mono text-xs bg-muted px-2 py-1 rounded">
+   687→   687→            {row.original.barcode || '-'}
+   688→   688→          </span>
+   689→   689→        ),
+   690→   690→      },
+   691→   691→      {
+   692→   692→        accessorKey: 'categoryId',
+   693→   693→        header: 'Kategori',
+   694→   694→        cell: ({ row }) => (
+   695→   695→          <Badge variant="outline" className="text-xs font-normal">
+   696→   696→            {row.original.category?.name || '-'}
+   697→   697→          </Badge>
+   698→   698→        ),
+   699→   699→        filterFn: (row, _columnId, filterValue) => {
+   700→   700→          if (!filterValue || filterValue === 'all') return true
+   701→   701→          return row.original.categoryId === filterValue
+   702→   702→        },
+   703→   703→      },
+   704→   704→      {
+   705→   705→        accessorKey: 'price',
+   706→   706→        header: ({ column }) => <SortableHeader column={column}>Harga</SortableHeader>,
+   707→   707→        cell: ({ row }) => (
+   708→   708→          <span className="font-medium text-sm">{formatRupiah(row.original.price)}</span>
+   709→   709→        ),
+   710→   710→      },
+   711→   711→      {
+   712→   712→        accessorKey: 'costPrice',
+   713→   713→        header: ({ column }) => <SortableHeader column={column}>Modal</SortableHeader>,
+   714→   714→        cell: ({ row }) => (
+   715→   715→          <span className="text-sm text-muted-foreground">
+   716→   716→            {formatRupiah(row.original.costPrice)}
+   717→   717→          </span>
+   718→   718→        ),
+   719→   719→      },
+   720→   720→      {
+   721→   721→        accessorKey: 'stock',
+   722→   722→        header: ({ column }) => <SortableHeader column={column}>Stok</SortableHeader>,
+   723→   723→        cell: ({ row }) => (
+   724→   724→          <div className="flex flex-col gap-0.5">
+   725→   725→            <span
+   726→   726→              className={cn(
+   727→   727→                'font-medium text-sm',
+   728→   728→                row.original.stock === 0
+   729→   729→                  ? 'text-red-600 dark:text-red-400'
+   730→   730→                  : row.original.stock <= row.original.minStock
+   731→   731→                    ? 'text-yellow-600 dark:text-yellow-400'
+   732→   732→                    : 'text-emerald-600 dark:text-emerald-400'
+   733→   733→              )}
+   734→   734→            >
+   735→   735→              {row.original.stock}
+   736→   736→            </span>
+   737→   737→            <StockBadge stock={row.original.stock} minStock={row.original.minStock} />
+   738→   738→          </div>
+   739→   739→        ),
+   740→   740→      },
+   741→   741→      {
+   742→   742→        accessorKey: 'minStock',
+   743→   743→        header: ({ column }) => <SortableHeader column={column}>Min Stok</SortableHeader>,
+   744→   744→        cell: ({ row }) => (
+   745→   745→          <span className="text-sm text-muted-foreground">{row.original.minStock}</span>
+   746→   746→        ),
+   747→   747→      },
+   748→   748→      {
+   749→   749→        accessorKey: 'unit',
+   750→   750→        header: 'Satuan',
+   751→   751→        cell: ({ row }) => (
+   752→   752→          <span className="text-xs bg-muted px-2 py-1 rounded">{row.original.unit}</span>
+   753→   753→        ),
+   754→   754→      },
+   755→   755→      {
+   756→   756→        accessorKey: 'active',
+   757→   757→        header: 'Status',
+   758→   758→        cell: ({ row }) => <StatusBadge active={row.original.active} />,
+   759→   759→        filterFn: (row, _columnId, filterValue) => {
+   760→   760→          if (!filterValue || filterValue === 'all') return true
+   761→   761→          return String(row.original.active) === filterValue
+   762→   762→        },
+   763→   763→      },
+   764→   764→      {
+   765→   765→        id: 'actions',
+   766→   766→        header: 'Aksi',
+   767→   767→        cell: ({ row }) => (
+   768→   768→          <div className="flex items-center gap-1">
+   769→   769→            <Button
+   770→   770→              variant="ghost"
+   771→   771→              size="icon"
+   772→   772→              className="h-8 w-8 text-muted-foreground hover:text-primary"
+   773→   773→              onClick={() => setEditProduct(row.original)}
+   774→   774→              title="Edit produk"
+   775→   775→            >
+   776→   776→              <Pencil className="h-4 w-4" />
+   777→   777→            </Button>
+   778→   778→            <Button
+   779→   779→              variant="ghost"
+   780→   780→              size="icon"
+   781→   781→              className="h-8 w-8 text-muted-foreground hover:text-destructive"
+   782→   782→              onClick={() => setDeleteProduct(row.original)}
+   783→   783→              title="Hapus produk"
+   784→   784→            >
+   785→   785→              <Trash2 className="h-4 w-4" />
+   786→   786→            </Button>
+   787→   787→          </div>
+   788→   788→        ),
+   789→   789→      },
+   790→   790→    ],
+   791→   791→    []
+   792→   792→  )
+   793→   793→
+   794→   794→  // React Table instance
+   795→   795→  const table = useReactTable({
+   796→   796→    data: products,
+   797→   797→    columns,
+   798→   798→    state: { sorting },
+   799→   799→    onSortingChange: setSorting,
+   800→   800→    getCoreRowModel: getCoreRowModel(),
+   801→   801→    getSortedRowModel: getSortedRowModel(),
+   802→   802→    getPaginationRowModel: getPaginationRowModel(),
+   803→   803→    getFilteredRowModel: getFilteredRowModel(),
+   804→   804→    manualPagination: true,
+   805→   805→    manualFiltering: true,
+   806→   806→    pageCount: totalPages,
+   807→   807→  })
+   808→   808→
+   809→   809→  // Stats
+   810→   810→  const lowStockCount = products.filter((p) => p.stock > 0 && p.stock <= p.minStock).length
+   811→   811→  const outOfStockCount = products.filter((p) => p.stock === 0).length
+   812→   812→  const activeCount = products.filter((p) => p.active).length
+   813→   813→
+   814→   814→  return (
+   815→   815→    <div className="flex-1 p-4 md:p-6 space-y-6 animate-fade-in-up">
+   816→   816→      {/* Header */}
+   817→   817→      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+   818→   818→        <div>
+   819→   819→          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+   820→   820→            <Package className="h-6 w-6 text-primary" />
+   821→   821→            Produk
+   822→   822→          </h1>
+   823→   823→          <p className="text-muted-foreground text-sm mt-1">
+   824→   824→            Kelola daftar produk toko Anda
+   825→   825→          </p>
+   826→   826→        </div>
+   827→   827→        <div className="flex items-center gap-2">
+   828→   828→          <Button
+   829→   829→            variant="outline"
+   830→   830→            size="sm"
+   831→   831→            className="gap-2"
+   832→   832→            onClick={() => toast.info('Fitur import sedang dikembangkan')}
+   833→   833→          >
+   834→   834→            <Upload className="h-4 w-4" />
+   835→   835→            <span className="hidden sm:inline">Import</span>
+   836→   836→          </Button>
+   837→   837→          <Button
+   838→   838→            variant="outline"
+   839→   839→            size="sm"
+   840→   840→            className="gap-2"
+   841→   841→            onClick={() => toast.info('Fitur export sedang dikembangkan')}
+   842→   842→          >
+   843→   843→            <Download className="h-4 w-4" />
+   844→   844→            <span className="hidden sm:inline">Export</span>
+   845→   845→          </Button>
+   846→   846→          <Button
+   847→   847→            size="sm"
+   848→   848→            className="gap-2"
+   849→   849→            onClick={() => setAddDialogOpen(true)}
+   850→   850→          >
+   851→   851→            <Plus className="h-4 w-4" />
+   852→   852→            Tambah Produk
+   853→   853→          </Button>
+   854→   854→        </div>
+   855→   855→      </div>
+   856→   856→
+   857→   857→      {/* Stats Cards */}
+   858→   858→      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+   859→   859→        <Card className="glass-card">
+   860→   860→          <CardContent className="p-4">
+   861→   861→            <div className="flex items-center justify-between">
+   862→   862→              <div>
+   863→   863→                <p className="text-xs text-muted-foreground">Total Produk</p>
+   864→   864→                <p className="text-2xl font-bold">{totalProducts}</p>
+   865→   865→              </div>
+   866→   866→              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+   867→   867→                <Package className="h-5 w-5 text-primary" />
+   868→   868→              </div>
+   869→   869→            </div>
+   870→   870→          </CardContent>
+   871→   871→        </Card>
+   872→   872→        <Card className="glass-card">
+   873→   873→          <CardContent className="p-4">
+   874→   874→            <div className="flex items-center justify-between">
+   875→   875→              <div>
+   876→   876→                <p className="text-xs text-muted-foreground">Aktif</p>
+   877→   877→                <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{activeCount}</p>
+   878→   878→              </div>
+   879→   879→              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10">
+   880→   880→                <Package className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+   881→   881→              </div>
+   882→   882→            </div>
+   883→   883→          </CardContent>
+   884→   884→        </Card>
+   885→   885→        <Card className="glass-card">
+   886→   886→          <CardContent className="p-4">
+   887→   887→            <div className="flex items-center justify-between">
+   888→   888→              <div>
+   889→   889→                <p className="text-xs text-muted-foreground">Stok Rendah</p>
+   890→   890→                <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{lowStockCount}</p>
+   891→   891→              </div>
+   892→   892→              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-yellow-500/10">
+   893→   893→                <Filter className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+   894→   894→              </div>
+   895→   895→            </div>
+   896→   896→          </CardContent>
+   897→   897→        </Card>
+   898→   898→        <Card className="glass-card">
+   899→   899→          <CardContent className="p-4">
+   900→   900→            <div className="flex items-center justify-between">
+   901→   901→              <div>
+   902→   902→                <p className="text-xs text-muted-foreground">Stok Habis</p>
+   903→   903→                <p className="text-2xl font-bold text-red-600 dark:text-red-400">{outOfStockCount}</p>
+   904→   904→              </div>
+   905→   905→              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-500/10">
+   906→   906→                <Trash2 className="h-5 w-5 text-red-600 dark:text-red-400" />
+   907→   907→              </div>
+   908→   908→            </div>
+   909→   909→          </CardContent>
+   910→   910→        </Card>
+   911→   911→      </div>
+   912→   912→
+   913→   913→      {/* Filters & Search */}
+   914→   914→      <Card className="glass-card">
+   915→   915→        <CardContent className="p-4">
+   916→   916→          <div className="flex flex-col sm:flex-row gap-3">
+   917→   917→            {/* Search */}
+   918→   918→            <div className="relative flex-1">
+   919→   919→              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+   920→   920→              <Input
+   921→   921→                placeholder="Cari nama, barcode, atau deskripsi..."
+   922→   922→                value={search}
+   923→   923→                onChange={(e) => setSearch(e.target.value)}
+   924→   924→                className="pl-9"
+   925→   925→              />
+   926→   926→            </div>
+   927→   927→
+   928→   928→            {/* Category Filter */}
+   929→   929→            <Select value={filterCategory} onValueChange={setFilterCategory}>
+   930→   930→              <SelectTrigger className="w-full sm:w-[180px]">
+   931→   931→                <SelectValue placeholder="Semua Kategori" />
+   932→   932→              </SelectTrigger>
+   933→   933→              <SelectContent>
+   934→   934→                <SelectItem value="all">Semua Kategori</SelectItem>
+   935→   935→                {categories.map((cat) => (
+   936→   936→                  <SelectItem key={cat.id} value={cat.id}>
+   937→   937→                    {cat.name} ({cat.productCount})
+   938→   938→                  </SelectItem>
+   939→   939→                ))}
+   940→   940→              </SelectContent>
+   941→   941→            </Select>
+   942→   942→
+   943→   943→            {/* Status Filter */}
+   944→   944→            <Select value={filterStatus} onValueChange={setFilterStatus}>
+   945→   945→              <SelectTrigger className="w-full sm:w-[140px]">
+   946→   946→                <SelectValue placeholder="Semua Status" />
+   947→   947→              </SelectTrigger>
+   948→   948→              <SelectContent>
+   949→   949→                <SelectItem value="all">Semua Status</SelectItem>
+   950→   950→                <SelectItem value="true">Aktif</SelectItem>
+   951→   951→                <SelectItem value="false">Nonaktif</SelectItem>
+   952→   952→              </SelectContent>
+   953→   953→            </Select>
+   954→   954→
+   955→   955→            {/* Refresh */}
+   956→   956→            <Button
+   957→   957→              variant="outline"
+   958→   958→              size="icon"
+   959→   959→              className="h-9 w-9 shrink-0"
+   960→   960→              onClick={() => fetchProducts(true)}
+   961→   961→              disabled={refreshing}
+   962→   962→              title="Refresh data"
+   963→   963→            >
+   964→   964→              <RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin')} />
+   965→   965→            </Button>
+   966→   966→          </div>
+   967→   967→        </CardContent>
+   968→   968→      </Card>
+   969→   969→
+   970→   970→      {/* Product Table */}
+   971→   971→      <Card className="glass-card">
+   972→   972→        <CardContent className="p-0">
+   973→   973→          {loading ? (
+   974→   974→            // Loading skeleton
+   975→   975→            <div className="p-4 space-y-3">
+   976→   976→              {Array.from({ length: 8 }).map((_, i) => (
+   977→   977→                <div key={i} className="flex items-center gap-4">
+   978→   978→                  <Skeleton className="h-8 w-8 rounded-lg" />
+   979→   979→                  <Skeleton className="h-4 w-[180px]" />
+   980→   980→                  <Skeleton className="h-4 w-[100px] ml-auto" />
+   981→   981→                  <Skeleton className="h-4 w-[80px]" />
+   982→   982→                  <Skeleton className="h-4 w-[60px]" />
+   983→   983→                  <Skeleton className="h-8 w-8 rounded" />
+   984→   984→                </div>
+   985→   985→              ))}
+   986→   986→            </div>
+   987→   987→          ) : products.length === 0 ? (
+   988→   988→            // Empty state
+   989→   989→            <div className="flex flex-col items-center justify-center py-16 text-center">
+   990→   990→              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
+   991→   991→                <Package className="h-8 w-8 text-primary" />
+   992→   992→              </div>
+   993→   993→              <h3 className="text-lg font-semibold mb-1">Belum Ada Produk</h3>
+   994→   994→              <p className="text-muted-foreground text-sm max-w-sm mb-4">
+   995→   995→                {search || filterCategory !== 'all' || filterStatus !== 'all'
+   996→   996→                  ? 'Tidak ada produk yang cocok dengan filter. Coba ubah kriteria pencarian.'
+   997→   997→                  : 'Mulai tambahkan produk pertama Anda untuk mengelola inventaris toko.'}
+   998→   998→              </p>
+   999→   999→              {!search && filterCategory === 'all' && filterStatus === 'all' && (
+  1000→  1000→                <Button onClick={() => setAddDialogOpen(true)} className="gap-2">
+  1001→  1001→                  <Plus className="h-4 w-4" />
+  1002→  1002→                  Tambah Produk Pertama
+  1003→  1003→                </Button>
+  1004→  1004→              )}
+  1005→  1005→            </div>
+  1006→  1006→          ) : (
+  1007→  1007→            // Table
+  1008→  1008→            <div className="overflow-x-auto">
+  1009→  1009→              <Table>
+  1010→  1010→                <TableHeader>
+  1011→  1011→                  {table.getHeaderGroups().map((headerGroup) => (
+  1012→  1012→                    <TableRow key={headerGroup.id}>
+  1013→  1013→                      {headerGroup.headers.map((header) => (
+  1014→  1014→                        <TableHead key={header.id} className="text-xs">
+  1015→  1015→                          {header.isPlaceholder
+  1016→  1016→                            ? null
+  1017→  1017→                            : flexRender(header.column.columnDef.header, header.getContext())}
+  1018→  1018→                        </TableHead>
+  1019→  1019→                      ))}
+  1020→  1020→                    </TableRow>
+  1021→  1021→                  ))}
+  1022→  1022→                </TableHeader>
+  1023→  1023→                <TableBody>
+  1024→  1024→                  {table.getRowModel().rows.map((row) => (
+  1025→  1025→                    <TableRow key={row.id} className="hover:bg-muted/40 transition-colors">
+  1026→  1026→                      {row.getVisibleCells().map((cell) => (
+  1027→  1027→                        <TableCell key={cell.id}>
+  1028→  1028→                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+  1029→  1029→                        </TableCell>
+  1030→  1030→                      ))}
+  1031→  1031→                    </TableRow>
+  1032→  1032→                  ))}
+  1033→  1033→                </TableBody>
+  1034→  1034→              </Table>
+  1035→  1035→            </div>
+  1036→  1036→          )}
+  1037→  1037→
+  1038→  1038→          {/* Pagination */}
+  1039→  1039→          {!loading && products.length > 0 && (
+  1040→  1040→            <div className="flex items-center justify-between border-t px-4 py-3">
+  1041→  1041→              <p className="text-xs text-muted-foreground">
+  1042→  1042→                Menampilkan {products.length} dari {totalProducts} produk
+  1043→  1043→              </p>
+  1044→  1044→              <div className="flex items-center gap-1">
+  1045→  1045→                <Button
+  1046→  1046→                  variant="outline"
+  1047→  1047→                  size="icon"
+  1048→  1048→                  className="h-8 w-8"
+  1049→  1049→                  onClick={() => setCurrentPage(1)}
+  1050→  1050→                  disabled={currentPage <= 1}
+  1051→  1051→                >
+  1052→  1052→                  <ChevronsUpDown className="h-3.5 w-3.5" />
+  1053→  1053→                </Button>
+  1054→  1054→                <Button
+  1055→  1055→                  variant="outline"
+  1056→  1056→                  size="icon"
+  1057→  1057→                  className="h-8 w-8"
+  1058→  1058→                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+  1059→  1059→                  disabled={currentPage <= 1}
+  1060→  1060→                >
+  1061→  1061→                  <ChevronLeft className="h-3.5 w-3.5" />
+  1062→  1062→                </Button>
+  1063→  1063→                <span className="px-3 text-xs font-medium">
+  1064→  1064→                  Hal {currentPage} / {totalPages}
+  1065→  1065→                </span>
+  1066→  1066→                <Button
+  1067→  1067→                  variant="outline"
+  1068→  1068→                  size="icon"
+  1069→  1069→                  className="h-8 w-8"
+  1070→  1070→                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+  1071→  1071→                  disabled={currentPage >= totalPages}
+  1072→  1072→                >
+  1073→  1073→                  <ChevronRight className="h-3.5 w-3.5" />
+  1074→  1074→                </Button>
+  1075→  1075→              </div>
+  1076→  1076→            </div>
+  1077→  1077→          )}
+  1078→  1078→        </CardContent>
+  1079→  1079→      </Card>
+  1080→  1080→
+  1081→  1081→      {/* Add Product Dialog */}
+  1082→  1082→      <ProductFormDialog
+  1083→  1083→        open={addDialogOpen}
+  1084→  1084→        onOpenChange={setAddDialogOpen}
+  1085→  1085→        categories={categories}
+  1086→  1086→        onSuccess={() => fetchProducts()}
+  1087→  1087→      />
+  1088→  1088→
+  1089→  1089→      {/* Edit Product Dialog */}
+  1090→  1090→      <ProductFormDialog
+  1091→  1091→        open={!!editProduct}
+  1092→  1092→        onOpenChange={(open) => {
+  1093→  1093→          if (!open) setEditProduct(null)
+  1094→  1094→        }}
+  1095→  1095→        product={editProduct}
+  1096→  1096→        categories={categories}
+  1097→  1097→        onSuccess={() => fetchProducts()}
+  1098→  1098→      />
+  1099→  1099→
+  1100→  1100→      {/* Delete Confirmation Dialog */}
+  1101→  1101→      <AlertDialog
+  1102→  1102→        open={!!deleteProduct}
+  1103→  1103→        onOpenChange={(open) => {
+  1104→  1104→          if (!open) setDeleteProduct(null)
+  1105→  1105→        }}
+  1106→  1106→      >
+  1107→  1107→        <AlertDialogContent className="glass-card">
+  1108→  1108→          <AlertDialogHeader>
+  1109→  1109→            <AlertDialogTitle className="flex items-center gap-2">
+  1110→  1110→              <Trash2 className="h-5 w-5 text-destructive" />
+  1111→  1111→              Nonaktifkan Produk
+  1112→  1112→            </AlertDialogTitle>
+  1113→  1113→            <AlertDialogDescription>
+  1114→  1114→              Apakah Anda yakin ingin menonaktifkan produk{' '}
+  1115→  1115→              <strong className="text-foreground">&quot;{deleteProduct?.name}&quot;</strong>?
+  1116→  1116→              Produk akan ditandai sebagai nonaktif dan tidak akan muncul di kasir.
+  1117→  1117→              Tindakan ini dapat dibatalkan dengan mengedit produk.
+  1118→  1118→            </AlertDialogDescription>
+  1119→  1119→          </AlertDialogHeader>
+  1120→  1120→          <AlertDialogFooter>
+  1121→  1121→            <AlertDialogCancel disabled={deleting}>Batal</AlertDialogCancel>
+  1122→  1122→            <AlertDialogAction
+  1123→  1123→              onClick={handleDelete}
+  1124→  1124→              disabled={deleting}
+  1125→  1125→              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+  1126→  1126→            >
+  1127→  1127→              {deleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+  1128→  1128→              Nonaktifkan
+  1129→  1129→            </AlertDialogAction>
+  1130→  1130→          </AlertDialogFooter>
+  1131→  1131→        </AlertDialogContent>
+  1132→  1132→      </AlertDialog>
+  1133→  1133→    </div>
+  1134→  1134→  )
+  1135→  1135→}
+  1136→  1136→

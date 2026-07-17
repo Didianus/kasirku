@@ -1,0 +1,1136 @@
+     1→'use client'
+     2→
+     3→import React, { useState, useEffect, useCallback, useMemo } from 'react'
+     4→import {
+     5→  ColumnDef,
+     6→  useReactTable,
+     7→  getCoreRowModel,
+     8→  getSortedRowModel,
+     9→  getPaginationRowModel,
+    10→  getFilteredRowModel,
+    11→  flexRender,
+    12→  SortingState,
+    13→  Column,
+    14→} from '@tanstack/react-table'
+    15→import { useForm } from 'react-hook-form'
+    16→import { zodResolver } from '@hookform/resolvers/zod'
+    17→import { z } from 'zod'
+    18→import {
+    19→  Plus,
+    20→  Search,
+    21→  Pencil,
+    22→  Trash2,
+    23→  Package,
+    24→  Filter,
+    25→  ChevronUp,
+    26→  ChevronDown,
+    27→  ChevronsUpDown,
+    28→  ChevronLeft,
+    29→  ChevronRight,
+    30→  Download,
+    31→  Upload,
+    32→  RefreshCw,
+    33→  Loader2,
+    34→} from 'lucide-react'
+    35→import { Button } from '@/components/ui/button'
+    36→import { Input } from '@/components/ui/input'
+    37→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+    38→import { Badge } from '@/components/ui/badge'
+    39→import { Label } from '@/components/ui/label'
+    40→import { Skeleton } from '@/components/ui/skeleton'
+    41→import {
+    42→  Table,
+    43→  TableBody,
+    44→  TableCell,
+    45→  TableHead,
+    46→  TableHeader,
+    47→  TableRow,
+    48→} from '@/components/ui/table'
+    49→import {
+    50→  Dialog,
+    51→  DialogContent,
+    52→  DialogHeader,
+    53→  DialogTitle,
+    54→  DialogDescription,
+    55→  DialogFooter,
+    56→} from '@/components/ui/dialog'
+    57→import {
+    58→  AlertDialog,
+    59→  AlertDialogAction,
+    60→  AlertDialogCancel,
+    61→  AlertDialogContent,
+    62→  AlertDialogDescription,
+    63→  AlertDialogFooter,
+    64→  AlertDialogHeader,
+    65→  AlertDialogTitle,
+    66→} from '@/components/ui/alert-dialog'
+    67→import {
+    68→  Select,
+    69→  SelectContent,
+    70→  SelectItem,
+    71→  SelectTrigger,
+    72→  SelectValue,
+    73→} from '@/components/ui/select'
+    74→import {
+    75→  Form,
+    76→  FormControl,
+    77→  FormField,
+    78→  FormItem,
+    79→  FormLabel,
+    80→  FormMessage,
+    81→} from '@/components/ui/form'
+    82→import { toast } from 'sonner'
+    83→import { cn } from '@/lib/utils'
+    84→
+    85→// ─── Types ───────────────────────────────────────────────────────────────────
+    86→
+    87→interface PosProdukProps {
+    88→  user: {
+    89→    id: string
+    90→    name: string
+    91→    email: string
+    92→    role: string
+    93→  }
+    94→}
+    95→
+    96→type Product = {
+    97→  id: string
+    98→  name: string
+    99→  barcode: string | null
+   100→  description: string | null
+   101→  price: number
+   102→  costPrice: number
+   103→  stock: number
+   104→  minStock: number
+   105→  unit: string
+   106→  categoryId: string
+   107→  image: string | null
+   108→  active: boolean
+   109→  createdAt: string
+   110→  updatedAt: string
+   111→  category: {
+   112→    id: string
+   113→    name: string
+   114→    icon: string | null
+   115→    color: string | null
+   116→  }
+   117→}
+   118→
+   119→type Category = {
+   120→  id: string
+   121→  name: string
+   122→  icon: string | null
+   123→  color: string | null
+   124→  productCount: number
+   125→}
+   126→
+   127→// ─── Helper ──────────────────────────────────────────────────────────────────
+   128→
+   129→function formatRupiah(amount: number): string {
+   130→  return new Intl.NumberFormat('id-ID', {
+   131→    style: 'currency',
+   132→    currency: 'IDR',
+   133→    minimumFractionDigits: 0,
+   134→  }).format(amount)
+   135→}
+   136→
+   137→// ─── Zod Schemas ─────────────────────────────────────────────────────────────
+   138→
+   139→const productFormSchema = z.object({
+   140→  name: z.string().min(1, 'Nama produk wajib diisi'),
+   141→  barcode: z.string().optional(),
+   142→  description: z.string().optional(),
+   143→  price: z.coerce.number().positive('Harga harus lebih dari 0'),
+   144→  costPrice: z.coerce.number().min(0, 'Modal tidak boleh negatif').optional(),
+   145→  stock: z.coerce.number().int().min(0, 'Stok tidak boleh negatif').optional(),
+   146→  minStock: z.coerce.number().int().min(0, 'Min stok tidak boleh negatif').optional(),
+   147→  unit: z.string().min(1, 'Satuan wajib diisi').optional(),
+   148→  categoryId: z.string().min(1, 'Kategori wajib dipilih'),
+   149→  image: z.string().optional(),
+   150→})
+   151→
+   152→type ProductFormValues = z.infer<typeof productFormSchema>
+   153→
+   154→// ─── Sort Header Component ──────────────────────────────────────────────────
+   155→
+   156→function SortableHeader({ column, children }: { column: Column<Product, unknown>; children: React.ReactNode }) {
+   157→  const isSorted = column.getIsSorted()
+   158→  return (
+   159→    <Button
+   160→      variant="ghost"
+   161→      size="sm"
+   162→      className="-ml-3 h-8 data-[state=open]:bg-accent"
+   163→      onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+   164→    >
+   165→      {children}
+   166→      {isSorted === 'asc' ? (
+   167→        <ChevronUp className="ml-1 h-4 w-4" />
+   168→      ) : isSorted === 'desc' ? (
+   169→        <ChevronDown className="ml-1 h-4 w-4" />
+   170→      ) : (
+   171→        <ChevronsUpDown className="ml-1 h-4 w-4 opacity-50" />
+   172→      )}
+   173→    </Button>
+   174→  )
+   175→}
+   176→
+   177→// ─── Stock Badge ─────────────────────────────────────────────────────────────
+   178→
+   179→function StockBadge({ stock, minStock }: { stock: number; minStock: number }) {
+   180→  if (stock === 0) {
+   181→    return <Badge variant="destructive" className="text-xs">Habis</Badge>
+   182→  }
+   183→  if (stock <= minStock) {
+   184→    return (
+   185→      <Badge className="text-xs bg-yellow-500/15 text-yellow-700 dark:text-yellow-400 border-yellow-500/25 hover:bg-yellow-500/25">
+   186→        Rendah
+   187→      </Badge>
+   188→    )
+   189→  }
+   190→  return (
+   191→    <Badge className="text-xs bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/25 hover:bg-emerald-500/25">
+   192→      Normal
+   193→    </Badge>
+   194→  )
+   195→}
+   196→
+   197→// ─── Status Badge ────────────────────────────────────────────────────────────
+   198→
+   199→function StatusBadge({ active }: { active: boolean }) {
+   200→  if (active) {
+   201→    return (
+   202→      <Badge className="text-xs bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/25 hover:bg-emerald-500/25">
+   203→        Aktif
+   204→      </Badge>
+   205→    )
+   206→  }
+   207→  return (
+   208→    <Badge variant="destructive" className="text-xs">
+   209→      Nonaktif
+   210→    </Badge>
+   211→  )
+   212→}
+   213→
+   214→// ─── Product Form Dialog ────────────────────────────────────────────────────
+   215→
+   216→function ProductFormDialog({
+   217→  open,
+   218→  onOpenChange,
+   219→  product,
+   220→  categories,
+   221→  onSuccess,
+   222→}: {
+   223→  open: boolean
+   224→  onOpenChange: (open: boolean) => void
+   225→  product?: Product | null
+   226→  categories: Category[]
+   227→  onSuccess: () => void
+   228→}) {
+   229→  const isEdit = !!product
+   230→  const [submitting, setSubmitting] = useState(false)
+   231→
+   232→  const form = useForm<ProductFormValues>({
+   233→    resolver: zodResolver(productFormSchema),
+   234→    defaultValues: {
+   235→      name: product?.name ?? '',
+   236→      barcode: product?.barcode ?? '',
+   237→      description: product?.description ?? '',
+   238→      price: product?.price ?? 0,
+   239→      costPrice: product?.costPrice ?? 0,
+   240→      stock: product?.stock ?? 0,
+   241→      minStock: product?.minStock ?? 5,
+   242→      unit: product?.unit ?? 'pcs',
+   243→      categoryId: product?.categoryId ?? '',
+   244→      image: product?.image ?? '',
+   245→    },
+   246→  })
+   247→
+   248→  // Reset form when dialog opens or product changes
+   249→  useEffect(() => {
+   250→    if (open) {
+   251→      form.reset({
+   252→        name: product?.name ?? '',
+   253→        barcode: product?.barcode ?? '',
+   254→        description: product?.description ?? '',
+   255→        price: product?.price ?? 0,
+   256→        costPrice: product?.costPrice ?? 0,
+   257→        stock: product?.stock ?? 0,
+   258→        minStock: product?.minStock ?? 5,
+   259→        unit: product?.unit ?? 'pcs',
+   260→        categoryId: product?.categoryId ?? '',
+   261→        image: product?.image ?? '',
+   262→      })
+   263→    }
+   264→  }, [open, product, form])
+   265→
+   266→  const onSubmit = async (values: ProductFormValues) => {
+   267→    setSubmitting(true)
+   268→    try {
+   269→      const url = isEdit ? `/api/products/${product.id}` : '/api/products'
+   270→      const method = isEdit ? 'PUT' : 'POST'
+   271→
+   272→      const res = await fetch(url, {
+   273→        method,
+   274→        headers: { 'Content-Type': 'application/json' },
+   275→        body: JSON.stringify(values),
+   276→      })
+   277→
+   278→      const data = await res.json()
+   279→
+   280→      if (!res.ok) {
+   281→        toast.error(data.error || 'Terjadi kesalahan')
+   282→        return
+   283→      }
+   284→
+   285→      toast.success(isEdit ? 'Produk berhasil diperbarui' : 'Produk berhasil ditambahkan')
+   286→      onOpenChange(false)
+   287→      onSuccess()
+   288→    } catch {
+   289→      toast.error('Terjadi kesalahan jaringan')
+   290→    } finally {
+   291→      setSubmitting(false)
+   292→    }
+   293→  }
+   294→
+   295→  return (
+   296→    <Dialog open={open} onOpenChange={onOpenChange}>
+   297→      <DialogContent className="sm:max-w-[525px] max-h-[90vh] overflow-y-auto glass-card">
+   298→        <DialogHeader>
+   299→          <DialogTitle className="flex items-center gap-2">
+   300→            <Package className="h-5 w-5 text-primary" />
+   301→            {isEdit ? 'Edit Produk' : 'Tambah Produk Baru'}
+   302→          </DialogTitle>
+   303→          <DialogDescription>
+   304→            {isEdit ? 'Perbarui informasi produk.' : 'Isi detail produk baru.'}
+   305→          </DialogDescription>
+   306→        </DialogHeader>
+   307→
+   308→        <Form {...form}>
+   309→          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+   310→            {/* Name */}
+   311→            <FormField
+   312→              control={form.control}
+   313→              name="name"
+   314→              render={({ field }) => (
+   315→                <FormItem>
+   316→                  <FormLabel>Nama Produk *</FormLabel>
+   317→                  <FormControl>
+   318→                    <Input placeholder="Masukkan nama produk" {...field} />
+   319→                  </FormControl>
+   320→                  <FormMessage />
+   321→                </FormItem>
+   322→              )}
+   323→            />
+   324→
+   325→            {/* Barcode & Category */}
+   326→            <div className="grid grid-cols-2 gap-4">
+   327→              <FormField
+   328→                control={form.control}
+   329→                name="barcode"
+   330→                render={({ field }) => (
+   331→                  <FormItem>
+   332→                    <FormLabel>Barcode</FormLabel>
+   333→                    <FormControl>
+   334→                      <Input placeholder="Scan atau ketik barcode" {...field} />
+   335→                    </FormControl>
+   336→                    <FormMessage />
+   337→                  </FormItem>
+   338→                )}
+   339→              />
+   340→
+   341→              <FormField
+   342→                control={form.control}
+   343→                name="categoryId"
+   344→                render={({ field }) => (
+   345→                  <FormItem>
+   346→                    <FormLabel>Kategori *</FormLabel>
+   347→                    <Select onValueChange={field.onChange} value={field.value}>
+   348→                      <FormControl>
+   349→                        <SelectTrigger className="w-full">
+   350→                          <SelectValue placeholder="Pilih kategori" />
+   351→                        </SelectTrigger>
+   352→                      </FormControl>
+   353→                      <SelectContent>
+   354→                        {categories.map((cat) => (
+   355→                          <SelectItem key={cat.id} value={cat.id}>
+   356→                            {cat.name}
+   357→                          </SelectItem>
+   358→                        ))}
+   359→                      </SelectContent>
+   360→                    </Select>
+   361→                    <FormMessage />
+   362→                  </FormItem>
+   363→                )}
+   364→              />
+   365→            </div>
+   366→
+   367→            {/* Description */}
+   368→            <FormField
+   369→              control={form.control}
+   370→              name="description"
+   371→              render={({ field }) => (
+   372→                <FormItem>
+   373→                  <FormLabel>Deskripsi</FormLabel>
+   374→                  <FormControl>
+   375→                    <Input placeholder="Deskripsi produk (opsional)" {...field} />
+   376→                  </FormControl>
+   377→                  <FormMessage />
+   378→                </FormItem>
+   379→              )}
+   380→            />
+   381→
+   382→            {/* Image URL */}
+   383→            <FormField
+   384→              control={form.control}
+   385→              name="image"
+   386→              render={({ field }) => (
+   387→                <FormItem>
+   388→                  <FormLabel>Gambar Produk</FormLabel>
+   389→                  <FormControl>
+   390→                    <Input placeholder="URL gambar produk (opsional)" {...field} />
+   391→                  </FormControl>
+   392→                  <FormMessage />
+   393→                  {field.value && (
+   394→                    <div className="mt-2">
+   395→                      <img
+   396→                        src={field.value}
+   397→                        alt="Preview"
+   398→                        className="h-16 w-16 rounded-lg object-cover border"
+   399→                        onError={(e) => {
+   400→                          (e.target as HTMLImageElement).style.display = 'none'
+   401→                        }}
+   402→                      />
+   403→                    </div>
+   404→                  )}
+   405→                </FormItem>
+   406→              )}
+   407→            />
+   408→
+   409→            {/* Price & Cost Price */}
+   410→            <div className="grid grid-cols-2 gap-4">
+   411→              <FormField
+   412→                control={form.control}
+   413→                name="price"
+   414→                render={({ field }) => (
+   415→                  <FormItem>
+   416→                    <FormLabel>Harga Jual *</FormLabel>
+   417→                    <FormControl>
+   418→                      <Input
+   419→                        type="number"
+   420→                        placeholder="0"
+   421→                        min="0"
+   422→                        {...field}
+   423→                        onChange={(e) => field.onChange(e.target.value === '' ? 0 : Number(e.target.value))}
+   424→                      />
+   425→                    </FormControl>
+   426→                    <FormMessage />
+   427→                  </FormItem>
+   428→                )}
+   429→              />
+   430→
+   431→              <FormField
+   432→                control={form.control}
+   433→                name="costPrice"
+   434→                render={({ field }) => (
+   435→                  <FormItem>
+   436→                    <FormLabel>Harga Modal</FormLabel>
+   437→                    <FormControl>
+   438→                      <Input
+   439→                        type="number"
+   440→                        placeholder="0"
+   441→                        min="0"
+   442→                        {...field}
+   443→                        onChange={(e) => field.onChange(e.target.value === '' ? 0 : Number(e.target.value))}
+   444→                      />
+   445→                    </FormControl>
+   446→                    <FormMessage />
+   447→                  </FormItem>
+   448→                )}
+   449→              />
+   450→            </div>
+   451→
+   452→            {/* Stock, Min Stock, Unit */}
+   453→            <div className="grid grid-cols-3 gap-4">
+   454→              <FormField
+   455→                control={form.control}
+   456→                name="stock"
+   457→                render={({ field }) => (
+   458→                  <FormItem>
+   459→                    <FormLabel>Stok</FormLabel>
+   460→                    <FormControl>
+   461→                      <Input
+   462→                        type="number"
+   463→                        placeholder="0"
+   464→                        min="0"
+   465→                        {...field}
+   466→                        onChange={(e) => field.onChange(e.target.value === '' ? 0 : Number(e.target.value))}
+   467→                      />
+   468→                    </FormControl>
+   469→                    <FormMessage />
+   470→                  </FormItem>
+   471→                )}
+   472→              />
+   473→
+   474→              <FormField
+   475→                control={form.control}
+   476→                name="minStock"
+   477→                render={({ field }) => (
+   478→                  <FormItem>
+   479→                    <FormLabel>Min Stok</FormLabel>
+   480→                    <FormControl>
+   481→                      <Input
+   482→                        type="number"
+   483→                        placeholder="5"
+   484→                        min="0"
+   485→                        {...field}
+   486→                        onChange={(e) => field.onChange(e.target.value === '' ? 0 : Number(e.target.value))}
+   487→                      />
+   488→                    </FormControl>
+   489→                    <FormMessage />
+   490→                  </FormItem>
+   491→                )}
+   492→              />
+   493→
+   494→              <FormField
+   495→                control={form.control}
+   496→                name="unit"
+   497→                render={({ field }) => (
+   498→                  <FormItem>
+   499→                    <FormLabel>Satuan</FormLabel>
+   500→                    <Select onValueChange={field.onChange} value={field.value || 'pcs'}>
+   501→                      <FormControl>
+   502→                        <SelectTrigger className="w-full">
+   503→                          <SelectValue placeholder="Pilih" />
+   504→                        </SelectTrigger>
+   505→                      </FormControl>
+   506→                      <SelectContent>
+   507→                        <SelectItem value="pcs">Pcs</SelectItem>
+   508→                        <SelectItem value="kg">Kg</SelectItem>
+   509→                        <SelectItem value="liter">Liter</SelectItem>
+   510→                        <SelectItem value="pack">Pack</SelectItem>
+   511→                        <SelectItem value="box">Box</SelectItem>
+   512→                        <SelectItem value="lusin">Lusin</SelectItem>
+   513→                        <SelectItem value="set">Set</SelectItem>
+   514→                        <SelectItem value="rim">Rim</SelectItem>
+   515→                      </SelectContent>
+   516→                    </Select>
+   517→                    <FormMessage />
+   518→                  </FormItem>
+   519→                )}
+   520→              />
+   521→            </div>
+   522→
+   523→            <DialogFooter className="pt-4">
+   524→              <Button
+   525→                type="button"
+   526→                variant="outline"
+   527→                onClick={() => onOpenChange(false)}
+   528→                disabled={submitting}
+   529→              >
+   530→                Batal
+   531→              </Button>
+   532→              <Button type="submit" disabled={submitting}>
+   533→                {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+   534→                {isEdit ? 'Simpan Perubahan' : 'Tambah Produk'}
+   535→              </Button>
+   536→            </DialogFooter>
+   537→          </form>
+   538→        </Form>
+   539→      </DialogContent>
+   540→    </Dialog>
+   541→  )
+   542→}
+   543→
+   544→// ─── Main Component ──────────────────────────────────────────────────────────
+   545→
+   546→export function PosProduk({ user }: PosProdukProps) {
+   547→  // State
+   548→  const [products, setProducts] = useState<Product[]>([])
+   549→  const [categories, setCategories] = useState<Category[]>([])
+   550→  const [totalProducts, setTotalProducts] = useState(0)
+   551→  const [totalPages, setTotalPages] = useState(1)
+   552→  const [loading, setLoading] = useState(true)
+   553→  const [refreshing, setRefreshing] = useState(false)
+   554→
+   555→  // Filters
+   556→  const [search, setSearch] = useState('')
+   557→  const [filterCategory, setFilterCategory] = useState<string>('all')
+   558→  const [filterStatus, setFilterStatus] = useState<string>('all')
+   559→
+   560→  // Pagination
+   561→  const [currentPage, setCurrentPage] = useState(1)
+   562→  const pageSize = 20
+   563→
+   564→  // Sorting
+   565→  const [sorting, setSorting] = useState<SortingState>([])
+   566→
+   567→  // Dialogs
+   568→  const [addDialogOpen, setAddDialogOpen] = useState(false)
+   569→  const [editProduct, setEditProduct] = useState<Product | null>(null)
+   570→  const [deleteProduct, setDeleteProduct] = useState<Product | null>(null)
+   571→  const [deleting, setDeleting] = useState(false)
+   572→
+   573→  // Fetch categories
+   574→  const fetchCategories = useCallback(async () => {
+   575→    try {
+   576→      const res = await fetch('/api/categories')
+   577→      if (res.ok) {
+   578→        const data = await res.json()
+   579→        setCategories(data.categories || [])
+   580→      }
+   581→    } catch {
+   582→      // silent fail for categories
+   583→    }
+   584→  }, [])
+   585→
+   586→  // Fetch products
+   587→  const fetchProducts = useCallback(async (showRefresh = false) => {
+   588→    if (showRefresh) setRefreshing(true)
+   589→    else setLoading(true)
+   590→
+   591→    try {
+   592→      const params = new URLSearchParams()
+   593→      if (search) params.set('search', search)
+   594→      if (filterCategory && filterCategory !== 'all') params.set('categoryId', filterCategory)
+   595→      if (filterStatus && filterStatus !== 'all') params.set('active', filterStatus)
+   596→      params.set('page', String(currentPage))
+   597→      params.set('limit', String(pageSize))
+   598→
+   599→      const res = await fetch(`/api/products?${params.toString()}`)
+   600→      if (res.ok) {
+   601→        const data = await res.json()
+   602→        setProducts(data.products || [])
+   603→        setTotalProducts(data.total || 0)
+   604→        setTotalPages(data.totalPages || 1)
+   605→      }
+   606→    } catch {
+   607→      toast.error('Gagal memuat data produk')
+   608→    } finally {
+   609→      setLoading(false)
+   610→      setRefreshing(false)
+   611→    }
+   612→  }, [search, filterCategory, filterStatus, currentPage])
+   613→
+   614→  useEffect(() => {
+   615→    fetchCategories()
+   616→  }, [fetchCategories])
+   617→
+   618→  useEffect(() => {
+   619→    fetchProducts()
+   620→  }, [fetchProducts])
+   621→
+   622→  // Reset page when filters change
+   623→  useEffect(() => {
+   624→    setCurrentPage(1)
+   625→  }, [search, filterCategory, filterStatus])
+   626→
+   627→  // Delete handler
+   628→  const handleDelete = async () => {
+   629→    if (!deleteProduct) return
+   630→    setDeleting(true)
+   631→    try {
+   632→      const res = await fetch(`/api/products/${deleteProduct.id}`, { method: 'DELETE' })
+   633→      const data = await res.json()
+   634→      if (!res.ok) {
+   635→        toast.error(data.error || 'Gagal menghapus produk')
+   636→        return
+   637→      }
+   638→      toast.success('Produk berhasil dinonaktifkan')
+   639→      setDeleteProduct(null)
+   640→      fetchProducts()
+   641→    } catch {
+   642→      toast.error('Terjadi kesalahan jaringan')
+   643→    } finally {
+   644→      setDeleting(false)
+   645→    }
+   646→  }
+   647→
+   648→  // Column definitions
+   649→  const columns = useMemo<ColumnDef<Product, unknown>[]>(
+   650→    () => [
+   651→      {
+   652→        accessorKey: 'name',
+   653→        header: ({ column }) => <SortableHeader column={column}>Nama Produk</SortableHeader>,
+   654→        cell: ({ row }) => (
+   655→          <div className="flex items-center gap-3">
+   656→            {row.original.image ? (
+   657→              <img
+   658→                src={row.original.image}
+   659→                alt={row.original.name}
+   660→                className="h-10 w-10 shrink-0 rounded-lg object-cover border border-border/50"
+   661→                onError={(e) => {
+   662→                  const target = e.target as HTMLImageElement
+   663→                  target.style.display = 'none'
+   664→                  target.nextElementSibling?.classList.remove('hidden')
+   665→                }}
+   666→              />
+   667→            ) : null}
+   668→            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary ${row.original.image ? 'hidden' : ''}`}>
+   669→              <Package className="h-4 w-4" />
+   670→            </div>
+   671→            <div className="min-w-0">
+   672→              <p className="font-medium text-sm truncate max-w-[200px]">{row.original.name}</p>
+   673→              {row.original.description && (
+   674→                <p className="text-xs text-muted-foreground truncate max-w-[200px]">
+   675→                  {row.original.description}
+   676→                </p>
+   677→              )}
+   678→            </div>
+   679→          </div>
+   680→        ),
+   681→      },
+   682→      {
+   683→        accessorKey: 'barcode',
+   684→        header: ({ column }) => <SortableHeader column={column}>Barcode</SortableHeader>,
+   685→        cell: ({ row }) => (
+   686→          <span className="font-mono text-xs bg-muted px-2 py-1 rounded">
+   687→            {row.original.barcode || '-'}
+   688→          </span>
+   689→        ),
+   690→      },
+   691→      {
+   692→        accessorKey: 'categoryId',
+   693→        header: 'Kategori',
+   694→        cell: ({ row }) => (
+   695→          <Badge variant="outline" className="text-xs font-normal">
+   696→            {row.original.category?.name || '-'}
+   697→          </Badge>
+   698→        ),
+   699→        filterFn: (row, _columnId, filterValue) => {
+   700→          if (!filterValue || filterValue === 'all') return true
+   701→          return row.original.categoryId === filterValue
+   702→        },
+   703→      },
+   704→      {
+   705→        accessorKey: 'price',
+   706→        header: ({ column }) => <SortableHeader column={column}>Harga</SortableHeader>,
+   707→        cell: ({ row }) => (
+   708→          <span className="font-medium text-sm">{formatRupiah(row.original.price)}</span>
+   709→        ),
+   710→      },
+   711→      {
+   712→        accessorKey: 'costPrice',
+   713→        header: ({ column }) => <SortableHeader column={column}>Modal</SortableHeader>,
+   714→        cell: ({ row }) => (
+   715→          <span className="text-sm text-muted-foreground">
+   716→            {formatRupiah(row.original.costPrice)}
+   717→          </span>
+   718→        ),
+   719→      },
+   720→      {
+   721→        accessorKey: 'stock',
+   722→        header: ({ column }) => <SortableHeader column={column}>Stok</SortableHeader>,
+   723→        cell: ({ row }) => (
+   724→          <div className="flex flex-col gap-0.5">
+   725→            <span
+   726→              className={cn(
+   727→                'font-medium text-sm',
+   728→                row.original.stock === 0
+   729→                  ? 'text-red-600 dark:text-red-400'
+   730→                  : row.original.stock <= row.original.minStock
+   731→                    ? 'text-yellow-600 dark:text-yellow-400'
+   732→                    : 'text-emerald-600 dark:text-emerald-400'
+   733→              )}
+   734→            >
+   735→              {row.original.stock}
+   736→            </span>
+   737→            <StockBadge stock={row.original.stock} minStock={row.original.minStock} />
+   738→          </div>
+   739→        ),
+   740→      },
+   741→      {
+   742→        accessorKey: 'minStock',
+   743→        header: ({ column }) => <SortableHeader column={column}>Min Stok</SortableHeader>,
+   744→        cell: ({ row }) => (
+   745→          <span className="text-sm text-muted-foreground">{row.original.minStock}</span>
+   746→        ),
+   747→      },
+   748→      {
+   749→        accessorKey: 'unit',
+   750→        header: 'Satuan',
+   751→        cell: ({ row }) => (
+   752→          <span className="text-xs bg-muted px-2 py-1 rounded">{row.original.unit}</span>
+   753→        ),
+   754→      },
+   755→      {
+   756→        accessorKey: 'active',
+   757→        header: 'Status',
+   758→        cell: ({ row }) => <StatusBadge active={row.original.active} />,
+   759→        filterFn: (row, _columnId, filterValue) => {
+   760→          if (!filterValue || filterValue === 'all') return true
+   761→          return String(row.original.active) === filterValue
+   762→        },
+   763→      },
+   764→      {
+   765→        id: 'actions',
+   766→        header: 'Aksi',
+   767→        cell: ({ row }) => (
+   768→          <div className="flex items-center gap-1">
+   769→            <Button
+   770→              variant="ghost"
+   771→              size="icon"
+   772→              className="h-8 w-8 text-muted-foreground hover:text-primary"
+   773→              onClick={() => setEditProduct(row.original)}
+   774→              title="Edit produk"
+   775→            >
+   776→              <Pencil className="h-4 w-4" />
+   777→            </Button>
+   778→            <Button
+   779→              variant="ghost"
+   780→              size="icon"
+   781→              className="h-8 w-8 text-muted-foreground hover:text-destructive"
+   782→              onClick={() => setDeleteProduct(row.original)}
+   783→              title="Hapus produk"
+   784→            >
+   785→              <Trash2 className="h-4 w-4" />
+   786→            </Button>
+   787→          </div>
+   788→        ),
+   789→      },
+   790→    ],
+   791→    []
+   792→  )
+   793→
+   794→  // React Table instance
+   795→  const table = useReactTable({
+   796→    data: products,
+   797→    columns,
+   798→    state: { sorting },
+   799→    onSortingChange: setSorting,
+   800→    getCoreRowModel: getCoreRowModel(),
+   801→    getSortedRowModel: getSortedRowModel(),
+   802→    getPaginationRowModel: getPaginationRowModel(),
+   803→    getFilteredRowModel: getFilteredRowModel(),
+   804→    manualPagination: true,
+   805→    manualFiltering: true,
+   806→    pageCount: totalPages,
+   807→  })
+   808→
+   809→  // Stats
+   810→  const lowStockCount = products.filter((p) => p.stock > 0 && p.stock <= p.minStock).length
+   811→  const outOfStockCount = products.filter((p) => p.stock === 0).length
+   812→  const activeCount = products.filter((p) => p.active).length
+   813→
+   814→  return (
+   815→    <div className="flex-1 p-4 md:p-6 space-y-6 animate-fade-in-up">
+   816→      {/* Header */}
+   817→      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+   818→        <div>
+   819→          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+   820→            <Package className="h-6 w-6 text-primary" />
+   821→            Produk
+   822→          </h1>
+   823→          <p className="text-muted-foreground text-sm mt-1">
+   824→            Kelola daftar produk toko Anda
+   825→          </p>
+   826→        </div>
+   827→        <div className="flex items-center gap-2">
+   828→          <Button
+   829→            variant="outline"
+   830→            size="sm"
+   831→            className="gap-2"
+   832→            onClick={() => toast.info('Fitur import sedang dikembangkan')}
+   833→          >
+   834→            <Upload className="h-4 w-4" />
+   835→            <span className="hidden sm:inline">Import</span>
+   836→          </Button>
+   837→          <Button
+   838→            variant="outline"
+   839→            size="sm"
+   840→            className="gap-2"
+   841→            onClick={() => toast.info('Fitur export sedang dikembangkan')}
+   842→          >
+   843→            <Download className="h-4 w-4" />
+   844→            <span className="hidden sm:inline">Export</span>
+   845→          </Button>
+   846→          <Button
+   847→            size="sm"
+   848→            className="gap-2"
+   849→            onClick={() => setAddDialogOpen(true)}
+   850→          >
+   851→            <Plus className="h-4 w-4" />
+   852→            Tambah Produk
+   853→          </Button>
+   854→        </div>
+   855→      </div>
+   856→
+   857→      {/* Stats Cards */}
+   858→      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+   859→        <Card className="glass-card">
+   860→          <CardContent className="p-4">
+   861→            <div className="flex items-center justify-between">
+   862→              <div>
+   863→                <p className="text-xs text-muted-foreground">Total Produk</p>
+   864→                <p className="text-2xl font-bold">{totalProducts}</p>
+   865→              </div>
+   866→              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+   867→                <Package className="h-5 w-5 text-primary" />
+   868→              </div>
+   869→            </div>
+   870→          </CardContent>
+   871→        </Card>
+   872→        <Card className="glass-card">
+   873→          <CardContent className="p-4">
+   874→            <div className="flex items-center justify-between">
+   875→              <div>
+   876→                <p className="text-xs text-muted-foreground">Aktif</p>
+   877→                <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{activeCount}</p>
+   878→              </div>
+   879→              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10">
+   880→                <Package className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+   881→              </div>
+   882→            </div>
+   883→          </CardContent>
+   884→        </Card>
+   885→        <Card className="glass-card">
+   886→          <CardContent className="p-4">
+   887→            <div className="flex items-center justify-between">
+   888→              <div>
+   889→                <p className="text-xs text-muted-foreground">Stok Rendah</p>
+   890→                <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{lowStockCount}</p>
+   891→              </div>
+   892→              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-yellow-500/10">
+   893→                <Filter className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+   894→              </div>
+   895→            </div>
+   896→          </CardContent>
+   897→        </Card>
+   898→        <Card className="glass-card">
+   899→          <CardContent className="p-4">
+   900→            <div className="flex items-center justify-between">
+   901→              <div>
+   902→                <p className="text-xs text-muted-foreground">Stok Habis</p>
+   903→                <p className="text-2xl font-bold text-red-600 dark:text-red-400">{outOfStockCount}</p>
+   904→              </div>
+   905→              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-500/10">
+   906→                <Trash2 className="h-5 w-5 text-red-600 dark:text-red-400" />
+   907→              </div>
+   908→            </div>
+   909→          </CardContent>
+   910→        </Card>
+   911→      </div>
+   912→
+   913→      {/* Filters & Search */}
+   914→      <Card className="glass-card">
+   915→        <CardContent className="p-4">
+   916→          <div className="flex flex-col sm:flex-row gap-3">
+   917→            {/* Search */}
+   918→            <div className="relative flex-1">
+   919→              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+   920→              <Input
+   921→                placeholder="Cari nama, barcode, atau deskripsi..."
+   922→                value={search}
+   923→                onChange={(e) => setSearch(e.target.value)}
+   924→                className="pl-9"
+   925→              />
+   926→            </div>
+   927→
+   928→            {/* Category Filter */}
+   929→            <Select value={filterCategory} onValueChange={setFilterCategory}>
+   930→              <SelectTrigger className="w-full sm:w-[180px]">
+   931→                <SelectValue placeholder="Semua Kategori" />
+   932→              </SelectTrigger>
+   933→              <SelectContent>
+   934→                <SelectItem value="all">Semua Kategori</SelectItem>
+   935→                {categories.map((cat) => (
+   936→                  <SelectItem key={cat.id} value={cat.id}>
+   937→                    {cat.name} ({cat.productCount})
+   938→                  </SelectItem>
+   939→                ))}
+   940→              </SelectContent>
+   941→            </Select>
+   942→
+   943→            {/* Status Filter */}
+   944→            <Select value={filterStatus} onValueChange={setFilterStatus}>
+   945→              <SelectTrigger className="w-full sm:w-[140px]">
+   946→                <SelectValue placeholder="Semua Status" />
+   947→              </SelectTrigger>
+   948→              <SelectContent>
+   949→                <SelectItem value="all">Semua Status</SelectItem>
+   950→                <SelectItem value="true">Aktif</SelectItem>
+   951→                <SelectItem value="false">Nonaktif</SelectItem>
+   952→              </SelectContent>
+   953→            </Select>
+   954→
+   955→            {/* Refresh */}
+   956→            <Button
+   957→              variant="outline"
+   958→              size="icon"
+   959→              className="h-9 w-9 shrink-0"
+   960→              onClick={() => fetchProducts(true)}
+   961→              disabled={refreshing}
+   962→              title="Refresh data"
+   963→            >
+   964→              <RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin')} />
+   965→            </Button>
+   966→          </div>
+   967→        </CardContent>
+   968→      </Card>
+   969→
+   970→      {/* Product Table */}
+   971→      <Card className="glass-card">
+   972→        <CardContent className="p-0">
+   973→          {loading ? (
+   974→            // Loading skeleton
+   975→            <div className="p-4 space-y-3">
+   976→              {Array.from({ length: 8 }).map((_, i) => (
+   977→                <div key={i} className="flex items-center gap-4">
+   978→                  <Skeleton className="h-8 w-8 rounded-lg" />
+   979→                  <Skeleton className="h-4 w-[180px]" />
+   980→                  <Skeleton className="h-4 w-[100px] ml-auto" />
+   981→                  <Skeleton className="h-4 w-[80px]" />
+   982→                  <Skeleton className="h-4 w-[60px]" />
+   983→                  <Skeleton className="h-8 w-8 rounded" />
+   984→                </div>
+   985→              ))}
+   986→            </div>
+   987→          ) : products.length === 0 ? (
+   988→            // Empty state
+   989→            <div className="flex flex-col items-center justify-center py-16 text-center">
+   990→              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
+   991→                <Package className="h-8 w-8 text-primary" />
+   992→              </div>
+   993→              <h3 className="text-lg font-semibold mb-1">Belum Ada Produk</h3>
+   994→              <p className="text-muted-foreground text-sm max-w-sm mb-4">
+   995→                {search || filterCategory !== 'all' || filterStatus !== 'all'
+   996→                  ? 'Tidak ada produk yang cocok dengan filter. Coba ubah kriteria pencarian.'
+   997→                  : 'Mulai tambahkan produk pertama Anda untuk mengelola inventaris toko.'}
+   998→              </p>
+   999→              {!search && filterCategory === 'all' && filterStatus === 'all' && (
+  1000→                <Button onClick={() => setAddDialogOpen(true)} className="gap-2">
+  1001→                  <Plus className="h-4 w-4" />
+  1002→                  Tambah Produk Pertama
+  1003→                </Button>
+  1004→              )}
+  1005→            </div>
+  1006→          ) : (
+  1007→            // Table
+  1008→            <div className="overflow-x-auto">
+  1009→              <Table>
+  1010→                <TableHeader>
+  1011→                  {table.getHeaderGroups().map((headerGroup) => (
+  1012→                    <TableRow key={headerGroup.id}>
+  1013→                      {headerGroup.headers.map((header) => (
+  1014→                        <TableHead key={header.id} className="text-xs">
+  1015→                          {header.isPlaceholder
+  1016→                            ? null
+  1017→                            : flexRender(header.column.columnDef.header, header.getContext())}
+  1018→                        </TableHead>
+  1019→                      ))}
+  1020→                    </TableRow>
+  1021→                  ))}
+  1022→                </TableHeader>
+  1023→                <TableBody>
+  1024→                  {table.getRowModel().rows.map((row) => (
+  1025→                    <TableRow key={row.id} className="hover:bg-muted/40 transition-colors">
+  1026→                      {row.getVisibleCells().map((cell) => (
+  1027→                        <TableCell key={cell.id}>
+  1028→                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+  1029→                        </TableCell>
+  1030→                      ))}
+  1031→                    </TableRow>
+  1032→                  ))}
+  1033→                </TableBody>
+  1034→              </Table>
+  1035→            </div>
+  1036→          )}
+  1037→
+  1038→          {/* Pagination */}
+  1039→          {!loading && products.length > 0 && (
+  1040→            <div className="flex items-center justify-between border-t px-4 py-3">
+  1041→              <p className="text-xs text-muted-foreground">
+  1042→                Menampilkan {products.length} dari {totalProducts} produk
+  1043→              </p>
+  1044→              <div className="flex items-center gap-1">
+  1045→                <Button
+  1046→                  variant="outline"
+  1047→                  size="icon"
+  1048→                  className="h-8 w-8"
+  1049→                  onClick={() => setCurrentPage(1)}
+  1050→                  disabled={currentPage <= 1}
+  1051→                >
+  1052→                  <ChevronsUpDown className="h-3.5 w-3.5" />
+  1053→                </Button>
+  1054→                <Button
+  1055→                  variant="outline"
+  1056→                  size="icon"
+  1057→                  className="h-8 w-8"
+  1058→                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+  1059→                  disabled={currentPage <= 1}
+  1060→                >
+  1061→                  <ChevronLeft className="h-3.5 w-3.5" />
+  1062→                </Button>
+  1063→                <span className="px-3 text-xs font-medium">
+  1064→                  Hal {currentPage} / {totalPages}
+  1065→                </span>
+  1066→                <Button
+  1067→                  variant="outline"
+  1068→                  size="icon"
+  1069→                  className="h-8 w-8"
+  1070→                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+  1071→                  disabled={currentPage >= totalPages}
+  1072→                >
+  1073→                  <ChevronRight className="h-3.5 w-3.5" />
+  1074→                </Button>
+  1075→              </div>
+  1076→            </div>
+  1077→          )}
+  1078→        </CardContent>
+  1079→      </Card>
+  1080→
+  1081→      {/* Add Product Dialog */}
+  1082→      <ProductFormDialog
+  1083→        open={addDialogOpen}
+  1084→        onOpenChange={setAddDialogOpen}
+  1085→        categories={categories}
+  1086→        onSuccess={() => fetchProducts()}
+  1087→      />
+  1088→
+  1089→      {/* Edit Product Dialog */}
+  1090→      <ProductFormDialog
+  1091→        open={!!editProduct}
+  1092→        onOpenChange={(open) => {
+  1093→          if (!open) setEditProduct(null)
+  1094→        }}
+  1095→        product={editProduct}
+  1096→        categories={categories}
+  1097→        onSuccess={() => fetchProducts()}
+  1098→      />
+  1099→
+  1100→      {/* Delete Confirmation Dialog */}
+  1101→      <AlertDialog
+  1102→        open={!!deleteProduct}
+  1103→        onOpenChange={(open) => {
+  1104→          if (!open) setDeleteProduct(null)
+  1105→        }}
+  1106→      >
+  1107→        <AlertDialogContent className="glass-card">
+  1108→          <AlertDialogHeader>
+  1109→            <AlertDialogTitle className="flex items-center gap-2">
+  1110→              <Trash2 className="h-5 w-5 text-destructive" />
+  1111→              Nonaktifkan Produk
+  1112→            </AlertDialogTitle>
+  1113→            <AlertDialogDescription>
+  1114→              Apakah Anda yakin ingin menonaktifkan produk{' '}
+  1115→              <strong className="text-foreground">&quot;{deleteProduct?.name}&quot;</strong>?
+  1116→              Produk akan ditandai sebagai nonaktif dan tidak akan muncul di kasir.
+  1117→              Tindakan ini dapat dibatalkan dengan mengedit produk.
+  1118→            </AlertDialogDescription>
+  1119→          </AlertDialogHeader>
+  1120→          <AlertDialogFooter>
+  1121→            <AlertDialogCancel disabled={deleting}>Batal</AlertDialogCancel>
+  1122→            <AlertDialogAction
+  1123→              onClick={handleDelete}
+  1124→              disabled={deleting}
+  1125→              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+  1126→            >
+  1127→              {deleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+  1128→              Nonaktifkan
+  1129→            </AlertDialogAction>
+  1130→          </AlertDialogFooter>
+  1131→        </AlertDialogContent>
+  1132→      </AlertDialog>
+  1133→    </div>
+  1134→  )
+  1135→}
+  1136→

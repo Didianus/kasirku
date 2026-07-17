@@ -1,0 +1,498 @@
+     1→import { PrismaClient } from '@prisma/client';
+     2→import bcrypt from 'bcryptjs';
+     3→
+     4→const prisma = new PrismaClient();
+     5→
+     6→async function main() {
+     7→  console.log('🌱 Seeding database...');
+     8→
+     9→  // Clean existing data
+    10→  await prisma.notification.deleteMany();
+    11→  await prisma.order.deleteMany();
+    12→  await prisma.booking.deleteMany();
+    13→  await prisma.schedule.deleteMany();
+    14→  await prisma.testimonial.deleteMany();
+    15→  await prisma.gallery.deleteMany();
+    16→  await prisma.article.deleteMany();
+    17→  await prisma.member.deleteMany();
+    18→  await prisma.instructor.deleteMany();
+    19→  await prisma.program.deleteMany();
+    20→  await prisma.membershipPlan.deleteMany();
+    21→  await prisma.admin.deleteMany();
+    22→
+    23→  // Admin Account
+    24→  const hashedPassword = await bcrypt.hash('admin123', 10);
+    25→  await prisma.admin.create({
+    26→    data: {
+    27→      name: 'Admin Rumah Yoga',
+    28→      email: 'admin@rumahyoga.com',
+    29→      password: hashedPassword,
+    30→      role: 'superadmin',
+    31→    },
+    32→  });
+    33→  console.log('✅ Admin account created (email: admin@rumahyoga.com, password: admin123)');
+    34→
+    35→  // Membership Plans
+    36→  const basicPlan = await prisma.membershipPlan.create({
+    37→    data: {
+    38→      name: 'Basic',
+    39→      price: 350000,
+    40→      duration: '1 Bulan',
+    41→      features: 'Akses 8 kelas per bulan,Jadwal kelas pagi,Sertifikat kehadiran,Konsultasi instruktur',
+    42→      popular: false,
+    43→    },
+    44→  });
+    45→
+    46→  const premiumPlan = await prisma.membershipPlan.create({
+    47→    data: {
+    48→      name: 'Premium',
+    49→      price: 650000,
+    50→      duration: '1 Bulan',
+    51→      features: 'Akses 16 kelas per bulan,Semua jadwal kelas,Sertifikat kehadiran,Konsultasi instruktur pribadi,Akses workshop bulanan,Diskon 10% merchandise',
+    52→      popular: true,
+    53→    },
+    54→  });
+    55→
+    56→  const unlimitedPlan = await prisma.membershipPlan.create({
+    57→    data: {
+    58→      name: 'Unlimited',
+    59→      price: 950000,
+    60→      duration: '1 Bulan',
+    61→      features: 'Akses tak terbatas semua kelas,Semua jadwal kelas,Sertifikat kehadiran,Konsultasi instruktur pribadi,Akses semua workshop & event,Diskon 20% merchandise,Sesi meditasi eksklusif,Private class 1x/bulan',
+    62→      popular: false,
+    63→    },
+    64→  });
+    65→
+    66→  // Programs
+    67→  const hathaYoga = await prisma.program.create({
+    68→    data: {
+    69→      name: 'Hatha Yoga',
+    70→      slug: 'hatha-yoga',
+    71→      description: 'Hatha Yoga adalah fondasi dari semua gaya yoga yang menggabungkan postur fisik (asana), teknik pernapasan (pranayama), dan meditasi. Cocok untuk pemula yang ingin membangun fondasi yoga yang kuat dengan gerakan yang lembut namun efektif.',
+    72→      benefits: 'Meningkatkan fleksibilitas,Menguatkan otot dan tulang,Meningkatkan keseimbangan,Mengurangi stres dan kecemasan,Meningkatkan kualitas tidur',
+    73→      duration: '60 menit',
+    74→      level: 'Beginner',
+    75→      image: '/images/hatha-yoga.jpg',
+    76→      icon: '🧘',
+    77→    },
+    78→  });
+    79→
+    80→  const vinyasaYoga = await prisma.program.create({
+    81→    data: {
+    82→      name: 'Vinyasa Yoga',
+    83→      slug: 'vinyasa-yoga',
+    84→      description: 'Vinyasa Yoga adalah gaya yoga dinamis yang mengalir dari satu pose ke pose lainnya secara harmonis dengan pernapasan. Setiap gerakan terhubung dengan tarikan dan hembusan napas, menciptakan meditasi dalam gerakan.',
+    85→      benefits: 'Membakar kalori lebih banyak,Meningkatkan kekuatan kardiovaskular,Meningkatkan fokus dan konsentrasi,Membangun kekuatan otot,Meningkatkan koordinasi tubuh',
+    86→      duration: '75 menit',
+    87→      level: 'Intermediate',
+    88→      image: '/images/vinyasa-yoga.jpg',
+    89→      icon: '🌊',
+    90→    },
+    91→  });
+    92→
+    93→  const yinYoga = await prisma.program.create({
+    94→    data: {
+    95→      name: 'Yin Yoga',
+    96→      slug: 'yin-yoga',
+    97→      description: 'Yin Yoga adalah praktik yang lembut dan meditatif di mana pose dipertahankan selama 3-5 menit. Fokus pada jaringan ikat, ligamen, dan sendi untuk meningkatkan fleksibilitas dalam dan ketenangan batin.',
+    98→      benefits: 'Melepaskan ketegangan dalam,Meningkatkan fleksibilitas sendi,Menyeimbangkan energi tubuh,Meningkatkan kesadaran diri,Mengurangi peradangan',
+    99→      duration: '90 menit',
+   100→      level: 'All Levels',
+   101→      image: '/images/yin-yoga.jpg',
+   102→      icon: '🌙',
+   103→    },
+   104→  });
+   105→
+   106→  const powerYoga = await prisma.program.create({
+   107→    data: {
+   108→      name: 'Power Yoga',
+   109→      slug: 'power-yoga',
+   110→      description: 'Power Yoga adalah gaya yoga intens yang menggabungkan kekuatan, fleksibilitas, dan ketahanan fisik. Dirancang untuk mereka yang menginginkan latihan yang menantang dan pembakaran kalori tinggi.',
+   111→      benefits: 'Membakar kalori intens,Membangun otot dan ketahanan,Meningkatkan metabolisme,Membentuk tubuh ideal,Meningkatkan kepercayaan diri',
+   112→      duration: '60 menit',
+   113→      level: 'Advanced',
+   114→      image: '/images/power-yoga.jpg',
+   115→      icon: '🔥',
+   116→    },
+   117→  });
+   118→
+   119→  const meditationClass = await prisma.program.create({
+   120→    data: {
+   121→      name: 'Meditation Class',
+   122→      slug: 'meditation-class',
+   123→      description: 'Kelas meditasi yang membimbing Anda menuju ketenangan batin dan kejernihan pikiran. Teknik meditasi yang diajarkan mencakup mindfulness, visualisasi, dan pernapasan sadar untuk kesejahteraan holistik.',
+   124→      benefits: 'Mengurangi stres dan kecemasan,Meningkatkan fokus dan konsentrasi,Meningkatkan kualitas tidur,Menyeimbangkan emosi,Meningkatkan kesadaran diri',
+   125→      duration: '45 menit',
+   126→      level: 'All Levels',
+   127→      image: '/images/meditation.jpg',
+   128→      icon: '✨',
+   129→    },
+   130→  });
+   131→
+   132→  // Instructors
+   133→  const instructor1 = await prisma.instructor.create({
+   134→    data: {
+   135→      name: 'Ananda Sri Wahyuni',
+   136→      specialty: 'Hatha Yoga, Yin Yoga',
+   137→      bio: 'Ananda adalah instruktur yoga bersertifikat internasional dengan pengalaman lebih dari 10 tahun. Ia belajar langsung dari guru-guru yoga di Rishikesh, India dan memiliki sertifikasi RYT-500 dari Yoga Alliance.',
+   138→      image: '/images/instructor-1.jpg',
+   139→      experience: 10,
+   140→      certifications: 'RYT-500 Yoga Alliance, Certified Yin Yoga Teacher, Certified Meditation Instructor',
+   141→      rating: 4.9,
+   142→    },
+   143→  });
+   144→
+   145→  const instructor2 = await prisma.instructor.create({
+   146→    data: {
+   147→      name: 'Budi Santoso',
+   148→      specialty: 'Vinyasa Yoga, Power Yoga',
+   149→      bio: 'Budi adalah atlet fitness yang beralih ke yoga dan menemukan keseimbangan sempurna antara kekuatan dan fleksibilitas. Dengan latar belakang olahraga, ia menghadirkan pendekatan yang energik dan memotivasi.',
+   150→      image: '/images/instructor-2.jpg',
+   151→      experience: 7,
+   152→      certifications: 'RYT-200 Yoga Alliance, Certified Power Yoga Instructor, Personal Trainer Certification',
+   153→      rating: 4.8,
+   154→    },
+   155→  });
+   156→
+   157→  const instructor3 = await prisma.instructor.create({
+   158→    data: {
+   159→      name: 'Dewi Lestari',
+   160→      specialty: 'Meditation, Yin Yoga',
+   161→      bio: 'Dewi adalah praktisi meditasi dan yoga yang telah berlatih selama lebih dari 15 tahun. Ia menggabungkan filosofi Timur dengan pendekatan modern untuk menciptakan pengalaman yang mendalam dan transformatif.',
+   162→      image: '/images/instructor-3.jpg',
+   163→      experience: 15,
+   164→      certifications: 'Certified Mindfulness Meditation Teacher, RYT-500 Yoga Alliance, Certified Yoga Therapist',
+   165→      rating: 5.0,
+   166→    },
+   167→  });
+   168→
+   169→  const instructor4 = await prisma.instructor.create({
+   170→    data: {
+   171→      name: 'Raka Pratama',
+   172→      specialty: 'Power Yoga, Vinyasa Yoga',
+   173→      bio: 'Raka menggabungkan latihan fisik yang intens dengan filosofi yoga yang dalam. Pengalaman belajar di Bali dan Thailand memberinya perspektif unik dalam mengajar yang menginspirasi banyak murid.',
+   174→      image: '/images/instructor-4.jpg',
+   175→      experience: 5,
+   176→      certifications: 'RYT-200 Yoga Alliance, Certified Ashtanga Yoga Teacher, Fitness Nutrition Specialist',
+   177→      rating: 4.7,
+   178→    },
+   179→  });
+   180→
+   181→  // Schedules (maxCapacity: 30 for all classes)
+   182→  const scheduleData = [
+   183→    { dayOfWeek: 'Senin', startTime: '06:00', endTime: '07:00', programId: hathaYoga.id, instructorId: instructor1.id, maxCapacity: 30, room: 'Studio Lotus' },
+   184→    { dayOfWeek: 'Senin', startTime: '09:00', endTime: '10:15', programId: vinyasaYoga.id, instructorId: instructor2.id, maxCapacity: 30, room: 'Studio Bamboo' },
+   185→    { dayOfWeek: 'Senin', startTime: '17:00', endTime: '18:00', programId: powerYoga.id, instructorId: instructor4.id, maxCapacity: 30, room: 'Studio Bamboo' },
+   186→    { dayOfWeek: 'Senin', startTime: '19:00', endTime: '20:00', programId: meditationClass.id, instructorId: instructor3.id, maxCapacity: 30, room: 'Studio Zen' },
+   187→    { dayOfWeek: 'Selasa', startTime: '07:00', endTime: '08:00', programId: vinyasaYoga.id, instructorId: instructor2.id, maxCapacity: 30, room: 'Studio Bamboo' },
+   188→    { dayOfWeek: 'Selasa', startTime: '09:00', endTime: '10:30', programId: yinYoga.id, instructorId: instructor1.id, maxCapacity: 30, room: 'Studio Lotus' },
+   189→    { dayOfWeek: 'Selasa', startTime: '17:30', endTime: '18:30', programId: hathaYoga.id, instructorId: instructor1.id, maxCapacity: 30, room: 'Studio Lotus' },
+   190→    { dayOfWeek: 'Selasa', startTime: '19:00', endTime: '20:00', programId: meditationClass.id, instructorId: instructor3.id, maxCapacity: 30, room: 'Studio Zen' },
+   191→    { dayOfWeek: 'Rabu', startTime: '06:00', endTime: '07:00', programId: powerYoga.id, instructorId: instructor4.id, maxCapacity: 30, room: 'Studio Bamboo' },
+   192→    { dayOfWeek: 'Rabu', startTime: '09:00', endTime: '10:00', programId: hathaYoga.id, instructorId: instructor1.id, maxCapacity: 30, room: 'Studio Lotus' },
+   193→    { dayOfWeek: 'Rabu', startTime: '17:00', endTime: '18:15', programId: vinyasaYoga.id, instructorId: instructor2.id, maxCapacity: 30, room: 'Studio Bamboo' },
+   194→    { dayOfWeek: 'Rabu', startTime: '19:00', endTime: '20:00', programId: yinYoga.id, instructorId: instructor3.id, maxCapacity: 30, room: 'Studio Lotus' },
+   195→    { dayOfWeek: 'Kamis', startTime: '06:00', endTime: '07:00', programId: hathaYoga.id, instructorId: instructor1.id, maxCapacity: 30, room: 'Studio Lotus' },
+   196→    { dayOfWeek: 'Kamis', startTime: '09:00', endTime: '10:15', programId: vinyasaYoga.id, instructorId: instructor2.id, maxCapacity: 30, room: 'Studio Bamboo' },
+   197→    { dayOfWeek: 'Kamis', startTime: '17:00', endTime: '18:00', programId: powerYoga.id, instructorId: instructor4.id, maxCapacity: 30, room: 'Studio Bamboo' },
+   198→    { dayOfWeek: 'Kamis', startTime: '19:00', endTime: '19:45', programId: meditationClass.id, instructorId: instructor3.id, maxCapacity: 30, room: 'Studio Zen' },
+   199→    { dayOfWeek: 'Jumat', startTime: '07:00', endTime: '08:00', programId: yinYoga.id, instructorId: instructor3.id, maxCapacity: 30, room: 'Studio Lotus' },
+   200→    { dayOfWeek: 'Jumat', startTime: '09:00', endTime: '10:00', programId: hathaYoga.id, instructorId: instructor1.id, maxCapacity: 30, room: 'Studio Lotus' },
+   201→    { dayOfWeek: 'Jumat', startTime: '16:00', endTime: '17:00', programId: vinyasaYoga.id, instructorId: instructor2.id, maxCapacity: 30, room: 'Studio Bamboo' },
+   202→    { dayOfWeek: 'Sabtu', startTime: '08:00', endTime: '09:15', programId: vinyasaYoga.id, instructorId: instructor2.id, maxCapacity: 30, room: 'Studio Bamboo' },
+   203→    { dayOfWeek: 'Sabtu', startTime: '09:30', endTime: '11:00', programId: yinYoga.id, instructorId: instructor3.id, maxCapacity: 30, room: 'Studio Lotus' },
+   204→    { dayOfWeek: 'Sabtu', startTime: '14:00', endTime: '15:00', programId: powerYoga.id, instructorId: instructor4.id, maxCapacity: 30, room: 'Studio Bamboo' },
+   205→    { dayOfWeek: 'Minggu', startTime: '08:00', endTime: '09:00', programId: hathaYoga.id, instructorId: instructor1.id, maxCapacity: 30, room: 'Studio Lotus' },
+   206→    { dayOfWeek: 'Minggu', startTime: '09:30', endTime: '10:30', programId: meditationClass.id, instructorId: instructor3.id, maxCapacity: 30, room: 'Studio Zen' },
+   207→  ];
+   208→
+   209→  for (const schedule of scheduleData) {
+   210→    await prisma.schedule.create({ data: schedule });
+   211→  }
+   212→
+   213→  // Testimonials
+   214→  const testimonialData = [
+   215→    {
+   216→      name: 'Sari Indrawati',
+   217→      role: 'Peserta Hatha Yoga',
+   218→      content: 'Rumah Yoga benar-benar mengubah hidup saya. Setelah 3 bulan berlatih Hatha Yoga, sakit punggung saya berkurang drastis dan saya merasa lebih tenang dalam menghadapi tekanan kerja. Instruktur sangat sabar dan membimbing dengan penuh perhatian.',
+   219→      rating: 5,
+   220→      image: '/images/testimonial-1.jpg',
+   221→      program: 'Hatha Yoga',
+   222→    },
+   223→    {
+   224→      name: 'Ahmad Fauzi',
+   225→      role: 'Peserta Power Yoga',
+   226→      content: 'Sebagai pria yang awalnya ragu dengan yoga, Power Yoga di Rumah Yoga membuktikan bahwa yoga bisa sangat menantang! Saya lebih bugar, lebih kuat, dan lebih fleksibel. Komunitas di sini juga sangat mendukung.',
+   227→      rating: 5,
+   228→      image: '/images/testimonial-2.jpg',
+   229→      program: 'Power Yoga',
+   230→    },
+   231→    {
+   232→      name: 'Ratna Dewi',
+   233→      role: 'Peserta Meditation Class',
+   234→      content: 'Kelas meditasi di Rumah Yoga adalah investasi terbaik untuk kesehatan mental saya. Setiap sesi membawa kedamaian yang saya bawa sepanjang hari. Dewi sebagai instruktur sangat inspiratif dan membimbing dengan lembut.',
+   235→      rating: 5,
+   236→      image: '/images/testimonial-3.jpg',
+   237→      program: 'Meditation Class',
+   238→    },
+   239→    {
+   240→      name: 'Maya Putri',
+   241→      role: 'Member Premium',
+   242→      content: 'Sudah 1 tahun menjadi member Premium dan tidak pernah menyesal! Banyak pilihan kelas, instruktur profesional, dan fasilitas yang bersih dan nyaman. Suasana Rumah Yoga benar-benar mendukung untuk berlatih dan menemukan keseimbangan.',
+   243→      rating: 5,
+   244→      image: '/images/testimonial-4.jpg',
+   245→      program: 'Vinyasa Yoga',
+   246→    },
+   247→    {
+   248→      name: 'Dimas Prasetyo',
+   249→      role: 'Peserta Vinyasa Yoga',
+   250→      content: 'Vinyasa Yoga di Rumah Yoga memberikan pengalaman yang luar biasa. Aliran gerakannya membuat saya merasa seperti bermeditasi sambil berolahraga. Budi sebagai instruktur selalu memastikan setiap murid mendapat perhatian.',
+   251→      rating: 4,
+   252→      image: '/images/testimonial-5.jpg',
+   253→      program: 'Vinyasa Yoga',
+   254→    },
+   255→    {
+   256→      name: 'Lina Marlina',
+   257→      role: 'Peserta Yin Yoga',
+   258→      content: 'Yin Yoga membantu saya melepaskan semua ketegangan yang terpendam. Setiap kelas terasa seperti terapi untuk tubuh dan jiwa. Suasana studio yang tenang dan musik yang menenangkan membuat pengalaman semakin sempurna.',
+   259→      rating: 5,
+   260→      image: '/images/testimonial-6.jpg',
+   261→      program: 'Yin Yoga',
+   262→    },
+   263→  ];
+   264→
+   265→  for (const testimonial of testimonialData) {
+   266→    await prisma.testimonial.create({ data: testimonial });
+   267→  }
+   268→
+   269→  // Gallery
+   270→  const galleryData = [
+   271→    { title: 'Sesi Hatha Yoga Pagi', description: 'Suasana kelas Hatha Yoga di pagi hari dengan pencahayaan alami', image: '/images/gallery-1.jpg', category: 'Kelas' },
+   272→    { title: 'Workshop Meditasi', description: 'Workshop meditasi khusus bersama instruktur Dewi Lestari', image: '/images/gallery-2.jpg', category: 'Event' },
+   273→    { title: 'Komunitas Rumah Yoga', description: 'Kegiatan bersama komunitas Rumah Yoga di taman kota', image: '/images/gallery-3.jpg', category: 'Komunitas' },
+   274→    { title: 'Studio Lotus', description: 'Studio utama dengan fasilitas lengkap dan suasana yang menenangkan', image: '/images/gallery-4.jpg', category: 'Fasilitas' },
+   275→    { title: 'Retreat Yoga Tahunan', description: 'Kegiatan retreat yoga tahunan di Bali', image: '/images/gallery-5.jpg', category: 'Event' },
+   276→    { title: 'Kelas Vinyasa Power', description: 'Kelas Vinyasa yang energik dan penuh semangat', image: '/images/gallery-6.jpg', category: 'Kelas' },
+   277→    { title: 'Studio Bamboo', description: 'Studio kedua dengan desain bambu yang alami dan asri', image: '/images/gallery-7.jpg', category: 'Fasilitas' },
+   278→    { title: 'Yoga di Alam Terbuka', description: 'Sesi yoga pagi di taman kota bersama komunitas', image: '/images/gallery-8.jpg', category: 'Komunitas' },
+   279→  ];
+   280→
+   281→  for (const gallery of galleryData) {
+   282→    await prisma.gallery.create({ data: gallery });
+   283→  }
+   284→
+   285→  // Articles
+   286→  const articleData = [
+   287→    {
+   288→      title: '5 Manfaat Yoga untuk Kesehatan Mental yang Terbukti Ilmiah',
+   289→      slug: 'manfaat-yoga-kesehatan-mental',
+   290→      excerpt: 'Penelitian ilmiah membuktikan bahwa yoga memiliki dampak positif yang signifikan terhadap kesehatan mental, mulai dari mengurangi stres hingga meningkatkan kualitas tidur.',
+   291→      content: 'Yoga bukan hanya aktivitas fisik, tetapi juga praktik holistik yang menyatukan tubuh, pikiran, dan jiwa. Berbagai penelitian ilmiah telah membuktikan manfaat yoga untuk kesehatan mental.\n\n## 1. Mengurangi Stres dan Kecemasan\n\nPraktik yoga secara konsisten terbukti menurunkan kadar kortisol, hormon stres, dalam tubuh. Kombinasi gerakan fisik, pernapasan, dan meditasi menciptakan respons relaksasi yang membantu menenangkan sistem saraf.\n\n## 2. Meningkatkan Kualitas Tidur\n\nYoga, terutama Yin Yoga dan meditasi, membantu menenangkan pikiran dan tubuh sebelum tidur. Penelitian menunjukkan bahwa orang yang berlatih yoga secara teratur mengalami peningkatan kualitas tidur yang signifikan.\n\n## 3. Mengurangi Gejala Depresi\n\nBeberapa studi menemukan bahwa yoga dapat menjadi terapi pelengkap yang efektif untuk depresi. Praktik yoga meningkatkan produksi serotonin dan GABA, neurotransmitter yang berperan dalam regulasi mood.\n\n## 4. Meningkatkan Fokus dan Konsentrasi\n\nMeditasi dan pranayama dalam yoga melatih otak untuk fokus pada saat ini. Ini membantu meningkatkan konsentrasi dan produktivitas dalam kehidupan sehari-hari.\n\n## 5. Membangun Ketahanan Emosional\n\nYoga mengajarkan kita untuk mengamati emosi tanpa bereaksi berlebihan. Ini membangun ketahanan emosional yang membantu kita menghadapi tantangan hidup dengan lebih tenang dan bijaksana.',
+   292→      category: 'Kesehatan',
+   293→      image: '/images/article-1.jpg',
+   294→      author: 'Dr. Ananda Sri Wahyuni',
+   295→      published: true,
+   296→    },
+   297→    {
+   298→      title: 'Panduan Lengkap Memulai Yoga untuk Pemula',
+   299→      slug: 'panduan-yoga-pemula',
+   300→      excerpt: 'Baru mulai yoga? Panduan ini akan membantu Anda memahami dasar-dasar yoga, memilih kelas yang tepat, dan memulai perjalanan yoga dengan percaya diri.',
+   301→      content: 'Memulai yoga bisa terasa menakutkan bagi pemula, tetapi jangan khawatir! Setiap yogi master pun pernah menjadi pemula. Berikut panduan lengkap untuk memulai perjalanan yoga Anda.\n\n## Apa Itu Yoga?\n\nYoga adalah praktik kuno yang berasal dari India yang menyatukan tubuh, pikiran, dan jiwa. Kata "yoga" berasal dari bahasa Sanskerta "yuj" yang berarti menyatukan.\n\n## Memilih Gaya Yoga yang Tepat\n\n- **Hatha Yoga**: Cocok untuk pemula, gerakan lambat dan lembut\n- **Vinyasa Yoga**: Lebih dinamis, gerakan mengalir dengan napas\n- **Yin Yoga**: Pose dipertahankan lama, fokus pada peregangan dalam\n- **Power Yoga**: Intens dan menantang, cocok untuk yang sudah berpengalaman\n\n## Peralatan yang Dibutuhkan\n\n1. Matras yoga berkualitas\n2. Pakaian yang nyaman dan elastis\n3. Botol air\n4. Handuk kecil\n\n## Tips untuk Pemula\n\n- Dengarkan tubuh Anda, jangan memaksakan gerakan\n- Konsistensi lebih penting daripada intensitas\n- Berlatih secara teratur, bahkan jika hanya 15 menit sehari\n- Jangan membandingkan diri dengan orang lain',
+   302→      category: 'Yoga',
+   303→      image: '/images/article-2.jpg',
+   304→      author: 'Budi Santoso',
+   305→      published: true,
+   306→    },
+   307→    {
+   308→      title: 'Teknik Meditasi Sederhana untuk Kehidupan Sehari-hari',
+   309→      slug: 'teknik-meditasi-sehari-hari',
+   310→      excerpt: 'Meditasi tidak harus rumit. Pelajari teknik meditasi sederhana yang bisa Anda praktikkan kapan saja dan di mana saja untuk menemukan ketenangan batin.',
+   311→      content: 'Meditasi adalah alat yang ampuh untuk menemukan ketenangan di tengah kesibukan kehidupan modern. Anda tidak perlu menghabiskan berjam-jam atau pergi ke tempat khusus untuk bermeditasi.\n\n## Teknik 1: Pernapasan Sadar\n\nDuduk nyaman, tutup mata, dan fokus pada napas Anda. Rasakan udara masuk dan keluar dari hidung. Ketika pikiran mengembara, kembalikan fokus ke napas. Mulai dengan 5 menit dan tingkatkan secara bertahap.\n\n## Teknik 2: Pemindaian Tubuh\n\nBerbaring atau duduk nyaman, lalu alihkan perhatian ke setiap bagian tubuh dari ujung kaki hingga puncak kepala. Rasakan setiap sensasi tanpa menghakimi. Teknik ini membantu melepaskan ketegangan fisik.\n\n## Teknik 3: Meditasi Berjalan\n\nBerjalan perlahan sambil memperhatikan setiap langkah. Rasakan kontak kaki dengan tanah, gerakan tubuh, dan udara di sekitar Anda. Ini adalah meditasi yang sangat cocok untuk Anda yang sulit duduk diam.\n\n## Teknik 4: Meditasi Gratitude\n\nSetiap malam sebelum tidur, pikirkan 3 hal yang Anda syukuri hari ini. Ini membantu mengubah pola pikir dari negatif ke positif dan meningkatkan kualitas tidur.',
+   312→      category: 'Meditasi',
+   313→      image: '/images/article-3.jpg',
+   314→      author: 'Dewi Lestari',
+   315→      published: true,
+   316→    },
+   317→    {
+   318→      title: 'Gaya Hidup Sehat: Nutrisi untuk Mendukung Praktik Yoga',
+   319→      slug: 'nutrisi-untuk-yoga',
+   320→      excerpt: 'Makanan yang tepat dapat meningkatkan performa dan manfaat yoga Anda. Pelajari panduan nutrisi yang mendukung praktik yoga dan kebugaran optimal.',
+   321→      content: 'Nutrisi yang tepat adalah fondasi dari praktik yoga yang optimal. Apa yang Anda makan memengaruhi energi, fleksibilitas, dan kejernihan pikiran Anda saat berlatih.\n\n## Prinsip Dasar Nutrisi Yoga\n\n### Makan Segar dan Alami\nPilih makanan yang segar, utuh, dan minim proses. Buah, sayur, biji-bijian, dan kacang-kacangan adalah sumber energi terbaik untuk praktik yoga.\n\n### Hydrasi yang Cukup\nMinum air putih yang cukup sepanjang hari. Hindari minum terlalu banyak tepat sebelum kelas untuk menghindari ketidaknyamanan.\n\n### Waktu Makan yang Tepat\nMakan 2-3 jam sebelum kelas yoga. Jika perlu camilan, pilih yang ringan seperti pisang atau kurma 30 menit sebelum kelas.\n\n## Makanan Terbaik untuk Yogi\n\n1. **Alpukat** - Lemak sehat untuk sendi yang fleksibel\n2. **Pisang** - Potassium untuk mencegah kram otot\n3. **Blueberry** - Antioksidan untuk pemulihan otot\n4. **Quinoa** - Protein nabati untuk kekuatan\n5. **Jahe** - Anti-inflamasi alami\n6. **Kunyit** - Mengurangi peradangan sendi',
+   322→      category: 'Gaya Hidup',
+   323→      image: '/images/article-4.jpg',
+   324→      author: 'Raka Pratama',
+   325→      published: true,
+   326→    },
+   327→  ];
+   328→
+   329→  for (const article of articleData) {
+   330→    await prisma.article.create({ data: article });
+   331→  }
+   332→
+   333→  // Sample Members
+   334→  const memberData = [
+   335→    {
+   336→      fullName: 'Siti Nurhaliza',
+   337→      email: 'siti.nurhaliza@email.com',
+   338→      phone: '081234567890',
+   339→      address: 'Jl. Merdeka No. 10, Jakarta Selatan',
+   340→      gender: 'Perempuan',
+   341→      dateOfBirth: '1990-05-15',
+   342→      membershipPlan: 'Premium',
+   343→      notes: 'Alumni kelas Hatha Yoga',
+   344→      status: 'active',
+   345→      paymentStatus: 'paid',
+   346→      paymentMethod: 'BCA',
+   347→      confirmedAt: new Date().toISOString(),
+   348→    },
+   349→    {
+   350→      fullName: 'Andi Wijaya',
+   351→      email: 'andi.wijaya@email.com',
+   352→      phone: '081345678901',
+   353→      address: 'Jl. Sudirman No. 25, Jakarta Pusat',
+   354→      gender: 'Laki-laki',
+   355→      dateOfBirth: '1985-08-22',
+   356→      membershipPlan: 'Unlimited',
+   357→      notes: 'Tertarik dengan Power Yoga',
+   358→      status: 'active',
+   359→      paymentStatus: 'paid',
+   360→      paymentMethod: 'GoPay',
+   361→      confirmedAt: new Date().toISOString(),
+   362→    },
+   363→    {
+   364→      fullName: 'Rina Wati',
+   365→      email: 'rina.wati@email.com',
+   366→      phone: '082456789012',
+   367→      address: 'Jl. Gatot Subroto No. 5, Jakarta Selatan',
+   368→      gender: 'Perempuan',
+   369→      dateOfBirth: '1995-03-10',
+   370→      membershipPlan: 'Basic',
+   371→      status: 'pending',
+   372→      paymentStatus: 'unpaid',
+   373→      paymentMethod: 'BNI',
+   374→    },
+   375→    {
+   376→      fullName: 'Bayu Pratama',
+   377→      email: 'bayu.pratama@email.com',
+   378→      phone: '083567890123',
+   379→      address: 'Jl. HR Rasuna Said No. 15, Jakarta Selatan',
+   380→      gender: 'Laki-laki',
+   381→      dateOfBirth: '1988-11-30',
+   382→      membershipPlan: 'Premium',
+   383→      notes: 'Ingin fokus pada meditasi',
+   384→      status: 'active',
+   385→      paymentStatus: 'paid',
+   386→      paymentMethod: 'Mandiri',
+   387→      confirmedAt: new Date().toISOString(),
+   388→    },
+   389→    {
+   390→      fullName: 'Yuni Astuti',
+   391→      email: 'yuni.astuti@email.com',
+   392→      phone: '084678901234',
+   393→      address: 'Jl. Thamrin No. 8, Jakarta Pusat',
+   394→      gender: 'Perempuan',
+   395→      dateOfBirth: '1992-07-18',
+   396→      membershipPlan: 'Basic',
+   397→      status: 'expired',
+   398→      paymentStatus: 'paid',
+   399→      paymentMethod: 'OVO',
+   400→    },
+   401→    {
+   402→      fullName: 'Dewi Sartika',
+   403→      email: 'dewi.sartika@email.com',
+   404→      phone: '085678901234',
+   405→      address: 'Jl. Kebon Sirih No. 20, Jakarta Pusat',
+   406→      gender: 'Perempuan',
+   407→      dateOfBirth: '1993-04-25',
+   408→      membershipPlan: 'Unlimited',
+   409→      notes: 'Sudah pernah berlatih yoga sebelumnya',
+   410→      status: 'pending',
+   411→      paymentStatus: 'unpaid',
+   412→      paymentMethod: 'DANA',
+   413→    },
+   414→  ];
+   415→
+   416→  for (const member of memberData) {
+   417→    await prisma.member.create({ data: member });
+   418→  }
+   419→
+   420→  // Sample Bookings - create a few using existing member emails, then update currentBooked directly
+   421→  // to demonstrate different capacity levels without creating hundreds of records
+   422→
+   423→  // Get schedule IDs for demo
+   424→  const seninHatha = (await prisma.schedule.findFirst({ where: { dayOfWeek: 'Senin', program: { name: 'Hatha Yoga' } } }))!;
+   425→  const seninVinyasa = (await prisma.schedule.findFirst({ where: { dayOfWeek: 'Senin', program: { name: 'Vinyasa Yoga' } } }))!;
+   426→  const seninPower = (await prisma.schedule.findFirst({ where: { dayOfWeek: 'Senin', program: { name: 'Power Yoga' } } }))!;
+   427→  const seninMeditation = (await prisma.schedule.findFirst({ where: { dayOfWeek: 'Senin', program: { name: 'Meditation Class' } } }))!;
+   428→  const selasaVinyasa = (await prisma.schedule.findFirst({ where: { dayOfWeek: 'Selasa', program: { name: 'Vinyasa Yoga' } } }))!;
+   429→  const selasaMeditation = (await prisma.schedule.findFirst({ where: { dayOfWeek: 'Selasa', program: { name: 'Meditation Class' } } }))!;
+   430→
+   431→  // Create a few real bookings with existing member emails
+   432→  await prisma.booking.create({
+   433→    data: {
+   434→      memberName: 'Siti Nurhaliza',
+   435→      memberEmail: 'siti.nurhaliza@email.com',
+   436→      memberPhone: '081234567890',
+   437→      scheduleId: seninHatha.id,
+   438→      classDate: '2025-03-03',
+   439→      status: 'confirmed',
+   440→    },
+   441→  });
+   442→  await prisma.booking.create({
+   443→    data: {
+   444→      memberName: 'Andi Wijaya',
+   445→      memberEmail: 'andi.wijaya@email.com',
+   446→      memberPhone: '081345678901',
+   447→      scheduleId: seninPower.id,
+   448→      classDate: '2025-03-03',
+   449→      status: 'confirmed',
+   450→    },
+   451→  });
+   452→  await prisma.booking.create({
+   453→    data: {
+   454→      memberName: 'Rina Wati',
+   455→      memberEmail: 'rina.wati@email.com',
+   456→      memberPhone: '082456789012',
+   457→      scheduleId: selasaVinyasa.id,
+   458→      classDate: '2025-03-04',
+   459→      status: 'completed',
+   460→    },
+   461→  });
+   462→
+   463→  // Update currentBooked on schedules to demonstrate capacity levels:
+   464→  // 🟢 Green (Tersedia): < 67% (0-19 of 30)
+   465→  // 🟡 Yellow (Hampir Penuh): 67-86% (20-25 of 30)
+   466→  // 🔴 Red (Segera Penuh): 87%+ (26-29 of 30)
+   467→  // ⛔ Full (Kelas Penuh): 30/30
+   468→
+   469→  // Senin Hatha: 22/30 → Yellow (Hampir Penuh)
+   470→  await prisma.schedule.update({ where: { id: seninHatha.id }, data: { currentBooked: 22 } });
+   471→
+   472→  // Senin Vinyasa: 27/30 → Red (Segera Penuh)
+   473→  await prisma.schedule.update({ where: { id: seninVinyasa.id }, data: { currentBooked: 27 } });
+   474→
+   475→  // Senin Power: 30/30 → Full (Kelas Penuh)
+   476→  await prisma.schedule.update({ where: { id: seninPower.id }, data: { currentBooked: 30 } });
+   477→
+   478→  // Senin Meditation: 12/30 → Green (Tersedia)
+   479→  await prisma.schedule.update({ where: { id: seninMeditation.id }, data: { currentBooked: 12 } });
+   480→
+   481→  // Selasa Vinyasa: 25/30 → Yellow (Hampir Penuh)
+   482→  await prisma.schedule.update({ where: { id: selasaVinyasa.id }, data: { currentBooked: 25 } });
+   483→
+   484→  // Selasa Meditation: 8/30 → Green (Tersedia)
+   485→  await prisma.schedule.update({ where: { id: selasaMeditation.id }, data: { currentBooked: 8 } });
+   486→
+   487→  console.log('✅ Database seeded successfully!');
+   488→}
+   489→
+   490→main()
+   491→  .catch((e) => {
+   492→    console.error(e);
+   493→    process.exit(1);
+   494→  })
+   495→  .finally(async () => {
+   496→    await prisma.$disconnect();
+   497→  });
+   498→
